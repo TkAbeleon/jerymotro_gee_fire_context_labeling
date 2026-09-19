@@ -1,121 +1,5 @@
-tsikynyantsa@ssh1 ~/jerymotro_gee_fire_context_labeling
- % python debug_gee_discovery.py
-
-==========================================================================================
-1. VERSIONS EXACTES
-==========================================================================================
-Python: 3.13.15 (main, Sep  1 2026, 07:11:56) [GCC 12.2.0]
-earthengine-api: 1.7.43
-ee module: /home/tsikynyantsa/jerymotro_gee_fire_context_labeling/venv/lib/python3.13/site-packages/ee/__init__.py
-google-api-python-client: unknown
-discovery.build: (serviceName, version, http=None, discoveryServiceUrl=None, developerKey=None, model=None, requestBuilder=<class 'googleapiclient.http.HttpRequest'>, credentials=None, cache_discovery=True, cache=None, client_options=None, adc_cert_path=None, adc_key_path=None, num_retries=1, static_discovery=None, always_use_jwt_access=False)
-
-==========================================================================================
-2. CODE INTERNE EARTH ENGINE
-==========================================================================================
-with_quota_project(None) present: True
-static_discovery=False present: True
-if credentials.quota_project_id:
-credentials = credentials.with_quota_project(None)
-discoveryServiceUrl=discovery_service_url,
-# google-api-python-client made static_discovery the default in version 2,
-resource = build(static_discovery=False)
-
-==========================================================================================
-3. JSON SERVICE ACCOUNT
-==========================================================================================
-KEY: /home/tsikynyantsa/jerymotro_gee_fire_context_labeling/service-account.json
-type: service_account
-project_id: antigravitygcp-499308
-client_email: jm-vl-543@antigravitygcp-499308.iam.gserviceaccount.com
-private_key_id: present
-private_key: present
-PROJECT EFFECTIF: antigravitygcp-499308
-
-==========================================================================================
-4. TOKEN OAUTH2
-==========================================================================================
-service_account_email: jm-vl-543@antigravitygcp-499308.iam.gserviceaccount.com
-quota_project_id AVANT: None
-TOKEN: OK
-expiry: 2026-09-19 13:19:57.505414
-
-==========================================================================================
-5. DISCOVERY A/B
-==========================================================================================
-
---- SANS credentials ---
-HTTP: 403
-Content-Type: text/html; charset=UTF-8
-Body:
-<!DOCTYPE html>
-<html lang=en>
-  <meta charset=utf-8>
-  <meta name=viewport content="initial-scale=1, minimum-scale=1, width=device-width">
-  <title>Error 403 (Forbidden)!!1</title>
-  <style>
-    *{margin:0;padding:0}html,code{font:15px/22px arial,sans-serif}html{background:#fff;color:#222;padding:15px}body{margin:7% auto 0;max-width:390px;min-height:180px;padding:30px 0 15px}* > body{background:url(//www.google.com/images/errors/robot.png) 100% 5px no-repeat;padding-right:205px}p{margin:11px 0 22px;overflow:hidden}ins{color:#777;text-decoration:none}a img{border:0}@media screen and (max-width:772px){body{background:none;margin-top:0;max-width:none;padding-right:0}}#logo{background:url(//www.google.com/images/branding/googlelogo/1x/googlelogo_color_150x54dp.png) no-repeat;margin-left:-5px}@media only screen and (min-resolution:192dpi){#logo{background:url(//www.google.com/images/branding/googlelogo/2x/googlelogo_color_150x54dp.png) no-repeat 0% 0%/100% 100%;-moz-border-image:url(//www.google.com/images/branding/googlelogo/2x/googlelogo_color_150x54dp.png) 0}}@media only screen and (-webkit-min-device-pixel-ratio:2){#logo{background:url(//www.google.com/images/branding/googlelogo/2x/googlelogo_color_150x54dp.png) no-repeat;-webkit-background-size:100% 100%}}#logo{display:inline-block;height:54px;width:150px}
-  </style>
-  <a href=//www.google.com/><span id=logo aria-label=Google></span></a>
-  <p><b>403.</b> <ins>That’s an error.</ins>
-  <p>Your client does not have permission to get URL <code>/$discovery/rest</code> from this server.  <ins>That’s all we know.</ins>
-
-
---- SERVICE ACCOUNT ---
-HTTP: 403
-Content-Type: text/html; charset=UTF-8
-Body:
-<!DOCTYPE html>
-<html lang=en>
-  <meta charset=utf-8>
-  <meta name=viewport content="initial-scale=1, minimum-scale=1, width=device-width">
-  <title>Error 403 (Forbidden)!!1</title>
-  <style>
-    *{margin:0;padding:0}html,code{font:15px/22px arial,sans-serif}html{background:#fff;color:#222;padding:15px}body{margin:7% auto 0;max-width:390px;min-height:180px;padding:30px 0 15px}* > body{background:url(//www.google.com/images/errors/robot.png) 100% 5px no-repeat;padding-right:205px}p{margin:11px 0 22px;overflow:hidden}ins{color:#777;text-decoration:none}a img{border:0}@media screen and (max-width:772px){body{background:none;margin-top:0;max-width:none;padding-right:0}}#logo{background:url(//www.google.com/images/branding/googlelogo/1x/googlelogo_color_150x54dp.png) no-repeat;margin-left:-5px}@media only screen and (min-resolution:192dpi){#logo{background:url(//www.google.com/images/branding/googlelogo/2x/googlelogo_color_150x54dp.png) no-repeat 0% 0%/100% 100%;-moz-border-image:url(//www.google.com/images/branding/googlelogo/2x/googlelogo_color_150x54dp.png) 0}}@media only screen and (-webkit-min-device-pixel-ratio:2){#logo{background:url(//www.google.com/images/branding/googlelogo/2x/googlelogo_color_150x54dp.png) no-repeat;-webkit-background-size:100% 100%}}#logo{display:inline-block;height:54px;width:150px}
-  </style>
-  <a href=//www.google.com/><span id=logo aria-label=Google></span></a>
-  <p><b>403.</b> <ins>That’s an error.</ins>
-  <p>Your client does not have permission to get URL <code>/$discovery/rest</code> from this server.  <ins>That’s all we know.</ins>
-
-quota_project_id APRES suppression: None
-
---- SERVICE ACCOUNT + quota_project SUPPRIME ---
-HTTP: 403
-Content-Type: text/html; charset=UTF-8
-Body:
-<!DOCTYPE html>
-<html lang=en>
-  <meta charset=utf-8>
-  <meta name=viewport content="initial-scale=1, minimum-scale=1, width=device-width">
-  <title>Error 403 (Forbidden)!!1</title>
-  <style>
-    *{margin:0;padding:0}html,code{font:15px/22px arial,sans-serif}html{background:#fff;color:#222;padding:15px}body{margin:7% auto 0;max-width:390px;min-height:180px;padding:30px 0 15px}* > body{background:url(//www.google.com/images/errors/robot.png) 100% 5px no-repeat;padding-right:205px}p{margin:11px 0 22px;overflow:hidden}ins{color:#777;text-decoration:none}a img{border:0}@media screen and (max-width:772px){body{background:none;margin-top:0;max-width:none;padding-right:0}}#logo{background:url(//www.google.com/images/branding/googlelogo/1x/googlelogo_color_150x54dp.png) no-repeat;margin-left:-5px}@media only screen and (min-resolution:192dpi){#logo{background:url(//www.google.com/images/branding/googlelogo/2x/googlelogo_color_150x54dp.png) no-repeat 0% 0%/100% 100%;-moz-border-image:url(//www.google.com/images/branding/googlelogo/2x/googlelogo_color_150x54dp.png) 0}}@media only screen and (-webkit-min-device-pixel-ratio:2){#logo{background:url(//www.google.com/images/branding/googlelogo/2x/googlelogo_color_150x54dp.png) no-repeat;-webkit-background-size:100% 100%}}#logo{display:inline-block;height:54px;width:150px}
-  </style>
-  <a href=//www.google.com/><span id=logo aria-label=Google></span></a>
-  <p><b>403.</b> <ins>That’s an error.</ins>
-  <p>Your client does not have permission to get URL <code>/$discovery/rest</code> from this server.  <ins>That’s all we know.</ins>
-
-
-==========================================================================================
-6. ee.Initialize() ISOLÉ
-==========================================================================================
-ee.Initialize ERROR:
-HttpError: <HttpError 403 when requesting https://earthengine.googleapis.com/$discovery/rest?version=v1&prettyPrint=false returned "Ok". Details: "<!DOCTYPE html>
-<html lang=en>
-  <meta charset=utf-8>
-  <meta name=viewport content="initial-scale=1, minimum-scale=1, width=device-width">
-  <title>Error 403 (Forbidden)!!1</title>
-  <style>
-    *{margin:0;padding:0}html,code{font:15px/22px arial,sans-serif}html{background:#fff;color:#222;padding:15px}body{margin:7% auto 0;max-width:390px;min-height:180px;padding:30px 0 15px}* > body{background:url(//www.google.com/images/errors/robot.png) 100% 5px no-repeat;padding-right:205px}p{margin:11px 0 22px;overflow:hidden}ins{color:#777;text-decoration:none}a img{border:0}@media screen and (max-width:772px){body{background:none;margin-top:0;max-width:none;padding-right:0}}#logo{background:url(//www.google.com/images/branding/googlelogo/1x/googlelogo_color_150x54dp.png) no-repeat;margin-left:-5px}@media only screen and (min-resolution:192dpi){#logo{background:url(//www.google.com/images/branding/googlelogo/2x/googlelogo_color_150x54dp.png) no-repeat 0% 0%/100% 100%;-moz-border-image:url(//www.google.com/images/branding/googlelogo/2x/googlelogo_color_150x54dp.png) 0}}@media only screen and (-webkit-min-device-pixel-ratio:2){#logo{background:url(//www.google.com/images/branding/googlelogo/2x/googlelogo_color_150x54dp.png) no-repeat;-webkit-background-size:100% 100%}}#logo{display:inline-block;height:54px;width:150px}
-  </style>
-  <a href=//www.google.com/><span id=logo aria-label=Google></span></a>
-  <p><b>403.</b> <ins>That’s an error.</ins>
-  <p>Your client does not have permission to get URL <code>/$discovery/rest</code> from this server.  <ins>That’s all we know.</ins>
-">
-
-TRACEBACK COMPLET:
 Traceback (most recent call last):
-  File "/home/tsikynyantsa/jerymotro_gee_fire_context_labeling/debug_gee_discovery.py", line 115, in <module>
+  File "/home/tsikynyantsa/jerymotro_gee_fire_context_labeling/debug_gee_discovery.py", line 154, in <module>
     ee.Initialize(credentials=creds, project=PROJECT)
     ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
   File "/home/tsikynyantsa/jerymotro_gee_fire_context_labeling/venv/lib/python3.13/site-packages/ee/_utils.py", line 39, in wrapper
@@ -186,7 +70,141 @@ googleapiclient.errors.HttpError: <HttpError 403 when requesting https://earthen
 ">
 
 ==========================================================================================
-7. CONCLUSION AUTOMATIQUE
+1. VERSIONS EXACTES
+==========================================================================================
+Python: 3.13.15 (main, Sep  1 2026, 07:11:56) [GCC 12.2.0]
+earthengine-api: 1.7.43
+ee module: /home/tsikynyantsa/jerymotro_gee_fire_context_labeling/venv/lib/python3.13/site-packages/ee/__init__.py
+google-api-python-client: unknown
+discovery.build: (serviceName, version, http=None, discoveryServiceUrl=None, developerKey=None, model=None, requestBuilder=<class 'googleapiclient.http.HttpRequest'>, credentials=None, cache_discovery=True, cache=None, client_options=None, adc_cert_path=None, adc_key_path=None, num_retries=1, static_discovery=None, always_use_jwt_access=False)
+
+==========================================================================================
+2. CODE INTERNE EARTH ENGINE
+==========================================================================================
+with_quota_project(None) present: True
+static_discovery=False present: True
+if credentials.quota_project_id:
+credentials = credentials.with_quota_project(None)
+discoveryServiceUrl=discovery_service_url,
+# google-api-python-client made static_discovery the default in version 2,
+resource = build(static_discovery=False)
+
+==========================================================================================
+3. JSON SERVICE ACCOUNT
+==========================================================================================
+KEY: /home/tsikynyantsa/jerymotro_gee_fire_context_labeling/service-account.json
+type: service_account
+project_id: antigravitygcp-499308
+client_email: jm-vl-543@antigravitygcp-499308.iam.gserviceaccount.com
+private_key_id: present
+private_key: present
+PROJECT EFFECTIF: antigravitygcp-499308
+
+==========================================================================================
+4. TOKEN OAUTH2
+==========================================================================================
+service_account_email: jm-vl-543@antigravitygcp-499308.iam.gserviceaccount.com
+quota_project_id AVANT: None
+TOKEN: OK
+expiry: 2026-09-19 13:25:05.059250
+
+==========================================================================================
+5. DISCOVERY A/B
+==========================================================================================
+
+--- SANS credentials ---
+HTTP: 403
+Content-Type: text/html; charset=UTF-8
+Body:
+<!DOCTYPE html>
+<html lang=en>
+  <meta charset=utf-8>
+  <meta name=viewport content="initial-scale=1, minimum-scale=1, width=device-width">
+  <title>Error 403 (Forbidden)!!1</title>
+  <style>
+    *{margin:0;padding:0}html,code{font:15px/22px arial,sans-serif}html{background:#fff;color:#222;padding:15px}body{margin:7% auto 0;max-width:390px;min-height:180px;padding:30px 0 15px}* > body{background:url(//www.google.com/images/errors/robot.png) 100% 5px no-repeat;padding-right:205px}p{margin:11px 0 22px;overflow:hidden}ins{color:#777;text-decoration:none}a img{border:0}@media screen and (max-width:772px){body{background:none;margin-top:0;max-width:none;padding-right:0}}#logo{background:url(//www.google.com/images/branding/googlelogo/1x/googlelogo_color_150x54dp.png) no-repeat;margin-left:-5px}@media only screen and (min-resolution:192dpi){#logo{background:url(//www.google.com/images/branding/googlelogo/2x/googlelogo_color_150x54dp.png) no-repeat 0% 0%/100% 100%;-moz-border-image:url(//www.google.com/images/branding/googlelogo/2x/googlelogo_color_150x54dp.png) 0}}@media only screen and (-webkit-min-device-pixel-ratio:2){#logo{background:url(//www.google.com/images/branding/googlelogo/2x/googlelogo_color_150x54dp.png) no-repeat;-webkit-background-size:100% 100%}}#logo{display:inline-block;height:54px;width:150px}
+  </style>
+  <a href=//www.google.com/><span id=logo aria-label=Google></span></a>
+  <p><b>403.</b> <ins>That’s an error.</ins>
+  <p>Your client does not have permission to get URL <code>/$discovery/rest</code> from this server.  <ins>That’s all we know.</ins>
+
+
+--- SERVICE ACCOUNT ---
+HTTP: 403
+Content-Type: text/html; charset=UTF-8
+Body:
+<!DOCTYPE html>
+<html lang=en>
+  <meta charset=utf-8>
+  <meta name=viewport content="initial-scale=1, minimum-scale=1, width=device-width">
+  <title>Error 403 (Forbidden)!!1</title>
+  <style>
+    *{margin:0;padding:0}html,code{font:15px/22px arial,sans-serif}html{background:#fff;color:#222;padding:15px}body{margin:7% auto 0;max-width:390px;min-height:180px;padding:30px 0 15px}* > body{background:url(//www.google.com/images/errors/robot.png) 100% 5px no-repeat;padding-right:205px}p{margin:11px 0 22px;overflow:hidden}ins{color:#777;text-decoration:none}a img{border:0}@media screen and (max-width:772px){body{background:none;margin-top:0;max-width:none;padding-right:0}}#logo{background:url(//www.google.com/images/branding/googlelogo/1x/googlelogo_color_150x54dp.png) no-repeat;margin-left:-5px}@media only screen and (min-resolution:192dpi){#logo{background:url(//www.google.com/images/branding/googlelogo/2x/googlelogo_color_150x54dp.png) no-repeat 0% 0%/100% 100%;-moz-border-image:url(//www.google.com/images/branding/googlelogo/2x/googlelogo_color_150x54dp.png) 0}}@media only screen and (-webkit-min-device-pixel-ratio:2){#logo{background:url(//www.google.com/images/branding/googlelogo/2x/googlelogo_color_150x54dp.png) no-repeat;-webkit-background-size:100% 100%}}#logo{display:inline-block;height:54px;width:150px}
+  </style>
+  <a href=//www.google.com/><span id=logo aria-label=Google></span></a>
+  <p><b>403.</b> <ins>That’s an error.</ins>
+  <p>Your client does not have permission to get URL <code>/$discovery/rest</code> from this server.  <ins>That’s all we know.</ins>
+
+quota_project_id APRES suppression: None
+
+--- SERVICE ACCOUNT + quota_project SUPPRIME ---
+HTTP: 403
+Content-Type: text/html; charset=UTF-8
+Body:
+<!DOCTYPE html>
+<html lang=en>
+  <meta charset=utf-8>
+  <meta name=viewport content="initial-scale=1, minimum-scale=1, width=device-width">
+  <title>Error 403 (Forbidden)!!1</title>
+  <style>
+    *{margin:0;padding:0}html,code{font:15px/22px arial,sans-serif}html{background:#fff;color:#222;padding:15px}body{margin:7% auto 0;max-width:390px;min-height:180px;padding:30px 0 15px}* > body{background:url(//www.google.com/images/errors/robot.png) 100% 5px no-repeat;padding-right:205px}p{margin:11px 0 22px;overflow:hidden}ins{color:#777;text-decoration:none}a img{border:0}@media screen and (max-width:772px){body{background:none;margin-top:0;max-width:none;padding-right:0}}#logo{background:url(//www.google.com/images/branding/googlelogo/1x/googlelogo_color_150x54dp.png) no-repeat;margin-left:-5px}@media only screen and (min-resolution:192dpi){#logo{background:url(//www.google.com/images/branding/googlelogo/2x/googlelogo_color_150x54dp.png) no-repeat 0% 0%/100% 100%;-moz-border-image:url(//www.google.com/images/branding/googlelogo/2x/googlelogo_color_150x54dp.png) 0}}@media only screen and (-webkit-min-device-pixel-ratio:2){#logo{background:url(//www.google.com/images/branding/googlelogo/2x/googlelogo_color_150x54dp.png) no-repeat;-webkit-background-size:100% 100%}}#logo{display:inline-block;height:54px;width:150px}
+  </style>
+  <a href=//www.google.com/><span id=logo aria-label=Google></span></a>
+  <p><b>403.</b> <ins>That’s an error.</ins>
+  <p>Your client does not have permission to get URL <code>/$discovery/rest</code> from this server.  <ins>That’s all we know.</ins>
+
+
+==========================================================================================
+6. API REST EARTH ENGINE DIRECTE (SANS DISCOVERY)
+==========================================================================================
+URL REST testée: https://earthengine.googleapis.com/v1/projects/antigravitygcp-499308/assets:listAssets?pageSize=1
+HTTP: 403
+Content-Type: text/html; charset=UTF-8
+Body: <!DOCTYPE html>
+<html lang=en>
+  <meta charset=utf-8>
+  <meta name=viewport content="initial-scale=1, minimum-scale=1, width=device-width">
+  <title>Error 403 (Forbidden)!!1</title>
+  <style>
+    *{margin:0;padding:0}html,code{font:15px/22px arial,sans-serif}html{background:#fff;color:#222;padding:15px}body{margin:7% auto 0;max-width:390px;min-height:180px;padding:30px 0 15px}* > body{background:url(//www.google.com/images/errors/robot.png) 100% 5px no-repeat;padding-right:205px}p{margin:11px 0 22px;overflow:hidden}ins{color:#777;text-decoration:none}a img{border:0}@media screen and (max-width:772px){body{background:none;margin-top:0;max-width:none;padding-right:0}}#logo{background:url(//www.google.com/images/branding/googlelogo/1x/googlelogo_color_150x54dp.png) no-repeat;margin-left:-5px}@media only screen and (min-resolution:192dpi){#logo{background:url(//www.google.com/images/branding/googlelogo/2x/googlelogo_color_150x54dp.png) no-repeat 0% 0%/100% 100%;-moz-border-image:url(//www.google.com/images/branding/googlelogo/2x/googlelogo_color_150x54dp.png) 0}}@media only screen and (-webkit-min-device-pixel-ratio:2){#logo{background:url(//www.google.com/images/branding/googlelogo/2x/googlelogo_color_150x54dp.png) no-repeat;-webkit-background-size:100% 100%}}#logo{display:inline-block;height:54px;width:150px}
+  </style>
+  <a href=//www.google.com/><span id=logo aria-label=Google></span></a>
+  <p><b>403.</b> <ins>That’s an error.</ins>
+  <p>Your client does not have permission to get URL <code>/v1/projects/antigravitygcp-499308/assets:listAssets</code> from this server.  <ins>That’s all we know.</ins>
+
+REST API: 403 — le problème dépasse le Discovery.
+
+==========================================================================================
+7. ee.Initialize() ISOLÉ
+==========================================================================================
+ee.Initialize ERROR:
+HttpError: <HttpError 403 when requesting https://earthengine.googleapis.com/$discovery/rest?version=v1&prettyPrint=false returned "Ok". Details: "<!DOCTYPE html>
+<html lang=en>
+  <meta charset=utf-8>
+  <meta name=viewport content="initial-scale=1, minimum-scale=1, width=device-width">
+  <title>Error 403 (Forbidden)!!1</title>
+  <style>
+    *{margin:0;padding:0}html,code{font:15px/22px arial,sans-serif}html{background:#fff;color:#222;padding:15px}body{margin:7% auto 0;max-width:390px;min-height:180px;padding:30px 0 15px}* > body{background:url(//www.google.com/images/errors/robot.png) 100% 5px no-repeat;padding-right:205px}p{margin:11px 0 22px;overflow:hidden}ins{color:#777;text-decoration:none}a img{border:0}@media screen and (max-width:772px){body{background:none;margin-top:0;max-width:none;padding-right:0}}#logo{background:url(//www.google.com/images/branding/googlelogo/1x/googlelogo_color_150x54dp.png) no-repeat;margin-left:-5px}@media only screen and (min-resolution:192dpi){#logo{background:url(//www.google.com/images/branding/googlelogo/2x/googlelogo_color_150x54dp.png) no-repeat 0% 0%/100% 100%;-moz-border-image:url(//www.google.com/images/branding/googlelogo/2x/googlelogo_color_150x54dp.png) 0}}@media only screen and (-webkit-min-device-pixel-ratio:2){#logo{background:url(//www.google.com/images/branding/googlelogo/2x/googlelogo_color_150x54dp.png) no-repeat;-webkit-background-size:100% 100%}}#logo{display:inline-block;height:54px;width:150px}
+  </style>
+  <a href=//www.google.com/><span id=logo aria-label=Google></span></a>
+  <p><b>403.</b> <ins>That’s an error.</ins>
+  <p>Your client does not have permission to get URL <code>/$discovery/rest</code> from this server.  <ins>That’s all we know.</ins>
+">
+
+TRACEBACK COMPLET:
+
+==========================================================================================
+8. CONCLUSION AUTOMATIQUE
 ==========================================================================================
 Discovery sans credentials : 403
 Discovery avec credentials  : 403
