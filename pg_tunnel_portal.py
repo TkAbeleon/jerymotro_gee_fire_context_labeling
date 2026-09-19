@@ -53,6 +53,7 @@ from __future__ import annotations
 
 import base64
 import signal
+import shlex
 import socket
 import subprocess
 import sys
@@ -269,12 +270,11 @@ except Exception:
         remote_program.encode("utf-8")
     ).decode("ascii")
 
-    return (
-        "python3 -u -c "
-        + '"import base64;exec(base64.b64decode(\''
-        + encoded
-        + "\'))""
+    python_code = (
+        "import base64; "
+        "exec(base64.b64decode(" + repr(encoded) + "))"
     )
+    return "python3 -u -c " + shlex.quote(python_code)
 
 
 def start_ssh_process() -> subprocess.Popen[bytes]:
