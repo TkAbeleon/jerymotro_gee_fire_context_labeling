@@ -1,0 +1,459 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+JeryMotro - Portail PostgreSQL temporaire via SSH / AlwaysData
+===============================================================
+
+But
+---
+Permettre à une application locale de joindre un PostgreSQL distant
+accessible depuis le serveur AlwaysData, alors que le port PostgreSQL
+distant est bloqué directement par le fournisseur d'accès Internet local.
+
+Architecture :
+
+    PC
+      |
+      | 127.0.0.1:5432
+      v
+    Ce portail TCP
+      |
+      | ssh tk
+      v
+    AlwaysData
+      |
+      | TCP 5432
+      v
+    jerymotro-numb-ghost-pooler.sage.cloud.layerbase.dev:5432
+
+Le portail est VOLONTAIREMENT TEMPORAIRE :
+- aucun service systemd ;
+- aucun daemon permanent ;
+- aucune modification du serveur AlwaysData ;
+- Ctrl+C arrête immédiatement le portail.
+
+Le programme utilise l'alias SSH "tk" défini dans ~/.ssh/config.
+Il ne demande donc pas de connaître ici l'hôte, le port SSH ou l'utilisateur.
+
+Usage
+-----
+    python3 pg_tunnel_portal.py
+
+Puis, dans un autre terminal local :
+
+    psql "postgresql://postgres:MOT_DE_PASSE@127.0.0.1:5432/jerymotro?sslmode=require"
+
+Important
+---------
+Le portail ne connaît ni ne stocke le mot de passe PostgreSQL.
+Il transporte simplement les octets TCP entre PostgreSQL local et distant.
+"""
+
+from __future__ import annotations
+
+import signal
+import socket
+import subprocess
+import sys
+import threading
+from dataclasses import dataclass
+
+
+# ---------------------------------------------------------------------------
+# Configuration
+# ---------------------------------------------------------------------------
+
+SSH_ALIAS = "tk"
+
+LOCAL_HOST = "127.0.0.1"
+LOCAL_PORT = 5432
+
+REMOTE_HOST = "jerymotro-numb-ghost-pooler.sage.cloud.layerbase.dev"
+REMOTE_PORT = 5432
+
+BUFFER_SIZE = 64 * 1024
+SOCKET_TIMEOUT = 30
+
+# Messages SSH éventuels : ne jamais les mélanger au flux PostgreSQL stdout.
+SSH_STDERR = subprocess.DEVNULL
+
+
+@dataclass
+class ConnectionStats:
+    sent_bytes: int = 0
+    received_bytes: int = 0
+
+
+# ---------------------------------------------------------------------------
+# Arrêt propre
+# ---------------------------------------------------------------------------
+
+stop_event = threading.Event()
+
+
+def handle_signal(signum: int, frame) -> None:  # noqa: ARG001
+    print(f"\n[!] Signal {signum} reçu. Arrêt du portail...")
+    stop_event.set()
+
+
+signal.signal(signal.SIGINT, handle_signal)
+signal.signal(signal.SIGTERM, handle_signal)
+
+
+# ---------------------------------------------------------------------------
+# Utilitaires
+# ---------------------------------------------------------------------------
+
+
+def close_socket(sock: socket.socket | None) -> None:
+    if sock is None:
+        return
+
+    try:
+        sock.shutdown(socket.SHUT_RDWR)
+    except OSError:
+        pass
+
+    try:
+        sock.close()
+    except OSError:
+        pass
+
+
+def close_process(proc: subprocess.Popen[bytes] | None) -> None:
+    if proc is None:
+        return
+
+    if proc.poll() is not None:
+        return
+
+    try:
+        proc.terminate()
+    except OSError:
+        pass
+
+    try:
+        proc.wait(timeout=2)
+    except subprocess.TimeoutExpired:
+        try:
+            proc.kill()
+        except OSError:
+            pass
+
+
+# ---------------------------------------------------------------------------
+# Test SSH
+# ---------------------------------------------------------------------------
+
+
+def test_ssh_alias() -> bool:
+    """
+    Vérifie que l'alias SSH "tk" fonctionne avant de commencer à écouter.
+    Aucun shell interactif n'est lancé.
+    """
+    print(f"[*] Vérification de l'alias SSH : {SSH_ALIAS}")
+
+    try:
+        result = subprocess.run(
+            [
+                "ssh",
+                "-T",
+                "-o",
+                "BatchMode=yes",
+                "-o",
+                "ConnectTimeout=10",
+                SSH_ALIAS,
+                "printf 'JERYMOTRO_SSH_OK'",
+            ],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=15,
+            check=False,
+        )
+    except FileNotFoundError:
+        print("[ERREUR] La commande 'ssh' est introuvable.")
+        return False
+    except subprocess.TimeoutExpired:
+        print("[ERREUR] Timeout pendant le test SSH.")
+        return False
+
+    stdout = result.stdout.decode("utf-8", errors="replace").strip()
+
+    if result.returncode != 0 or "JERYMOTRO_SSH_OK" not in stdout:
+        stderr = result.stderr.decode("utf-8", errors="replace").strip()
+        print("[ERREUR] L'alias SSH 'tk' n'est pas utilisable en BatchMode.")
+        if stderr:
+            print(f"        SSH : {stderr}")
+        return False
+
+    print("[OK] Alias SSH 'tk' fonctionnel.")
+    return True
+
+
+# ---------------------------------------------------------------------------
+# Processus SSH
+# ---------------------------------------------------------------------------
+
+
+def build_remote_command() -> str:
+    """
+    Construit la commande distante sans dépendre d'un fichier installé
+    sur AlwaysData.
+
+    Le programme Python distant lit stdin et écrit stdout, ce qui permet
+    de transporter le protocole PostgreSQL sans l'exposer publiquement.
+    """
+    return (
+        "exec python3 -u -c "
+        "'import socket,sys,threading;"
+        f"s=socket.create_connection(({REMOTE_HOST!r},{REMOTE_PORT}),{SOCKET_TIMEOUT});"
+        "s.settimeout(None);"
+        "def a():"
+        "\n    "
+        "while True:"
+        "\n        d=sys.stdin.buffer.read(65536);"
+        "\n        if not d: break;"
+        "\n        s.sendall(d);"
+        "\ndef b():"
+        "\n    "
+        "while True:"
+        "\n        d=s.recv(65536);"
+        "\n        if not d: break;"
+        "\n        sys.stdout.buffer.write(d);"
+        "\n        sys.stdout.buffer.flush();"
+        "\nt1=threading.Thread(target=a,daemon=True);"
+        "t2=threading.Thread(target=b,daemon=True);"
+        "t1.start();t2.start();t1.join();t2.join();"
+        "s.close()'"
+    )
+
+
+def start_ssh_process() -> subprocess.Popen[bytes]:
+    """
+    Ouvre une connexion SSH non interactive vers AlwaysData.
+
+    stdout = flux brut vers PostgreSQL.
+    stderr est volontairement ignoré pour ne jamais contaminer stdout.
+    """
+    return subprocess.Popen(
+        [
+            "ssh",
+            "-T",
+            "-o",
+            "BatchMode=yes",
+            "-o",
+            "ConnectTimeout=20",
+            "-o",
+            "ServerAliveInterval=30",
+            "-o",
+            "ServerAliveCountMax=3",
+            "-o",
+            "TCPKeepAlive=yes",
+            "-o",
+            "LogLevel=ERROR",
+            SSH_ALIAS,
+            build_remote_command(),
+        ],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=SSH_STDERR,
+        bufsize=0,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Relais bidirectionnel
+# ---------------------------------------------------------------------------
+
+
+def pipe_socket_to_ssh(
+    client: socket.socket,
+    proc: subprocess.Popen[bytes],
+    stats: ConnectionStats,
+) -> None:
+    if proc.stdin is None:
+        return
+
+    try:
+        while not stop_event.is_set():
+            data = client.recv(BUFFER_SIZE)
+
+            if not data:
+                break
+
+            proc.stdin.write(data)
+            proc.stdin.flush()
+            stats.sent_bytes += len(data)
+
+    except (BrokenPipeError, ConnectionResetError, OSError):
+        pass
+
+    finally:
+        try:
+            proc.stdin.close()
+        except OSError:
+            pass
+
+
+def pipe_ssh_to_socket(
+    client: socket.socket,
+    proc: subprocess.Popen[bytes],
+    stats: ConnectionStats,
+) -> None:
+    if proc.stdout is None:
+        return
+
+    try:
+        while not stop_event.is_set():
+            data = proc.stdout.read(BUFFER_SIZE)
+
+            if not data:
+                break
+
+            client.sendall(data)
+            stats.received_bytes += len(data)
+
+    except (BrokenPipeError, ConnectionResetError, OSError):
+        pass
+
+
+# ---------------------------------------------------------------------------
+# Connexion client
+# ---------------------------------------------------------------------------
+
+
+def handle_client(
+    client: socket.socket,
+    address: tuple[str, int],
+) -> None:
+    stats = ConnectionStats()
+    proc: subprocess.Popen[bytes] | None = None
+
+    print(f"[+] Connexion PostgreSQL : {address[0]}:{address[1]}")
+
+    try:
+        client.settimeout(None)
+
+        proc = start_ssh_process()
+
+        if proc.stdin is None or proc.stdout is None:
+            raise RuntimeError("Impossible d'ouvrir stdin/stdout du processus SSH.")
+
+        to_ssh = threading.Thread(
+            target=pipe_socket_to_ssh,
+            args=(client, proc, stats),
+            daemon=True,
+            name="pg-client-to-ssh",
+        )
+
+        to_client = threading.Thread(
+            target=pipe_ssh_to_socket,
+            args=(client, proc, stats),
+            daemon=True,
+            name="pg-ssh-to-client",
+        )
+
+        to_ssh.start()
+        to_client.start()
+
+        to_ssh.join()
+        to_client.join()
+
+    except Exception as exc:  # noqa: BLE001
+        print(f"[ERREUR] Connexion {address}: {type(exc).__name__}: {exc}")
+
+    finally:
+        close_process(proc)
+        close_socket(client)
+
+    print(
+        f"[-] Connexion terminée : {address[0]}:{address[1]} | "
+        f"PC→PG={stats.sent_bytes} octets | "
+        f"PG→PC={stats.received_bytes} octets"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Serveur local
+# ---------------------------------------------------------------------------
+
+
+def run_server() -> None:
+    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+    try:
+        server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        server.bind((LOCAL_HOST, LOCAL_PORT))
+        server.listen(20)
+        server.settimeout(1.0)
+    except OSError as exc:
+        close_socket(server)
+        print(
+            f"[ERREUR] Impossible d'écouter sur {LOCAL_HOST}:{LOCAL_PORT} : "
+            f"{type(exc).__name__}: {exc}"
+        )
+        print(
+            "[INFO] Vérifiez qu'un autre PostgreSQL ou processus n'utilise pas "
+            "déjà le port 5432."
+        )
+        raise SystemExit(1) from exc
+
+    print()
+    print("=" * 72)
+    print(" JERYMOTRO — PORTAIL POSTGRESQL TEMPORAIRE")
+    print("=" * 72)
+    print(f" Local      : {LOCAL_HOST}:{LOCAL_PORT}")
+    print(f" SSH        : {SSH_ALIAS}")
+    print(f" PostgreSQL : {REMOTE_HOST}:{REMOTE_PORT}")
+    print("=" * 72)
+    print()
+    print("[OK] Portail démarré.")
+    print("[INFO] Les connexions locales vers 127.0.0.1:5432 seront relayées")
+    print("[INFO] via SSH 'tk' vers le PostgreSQL distant.")
+    print("[INFO] Ctrl+C pour arrêter.")
+    print()
+
+    try:
+        while not stop_event.is_set():
+            try:
+                client, address = server.accept()
+            except socket.timeout:
+                continue
+            except OSError:
+                if stop_event.is_set():
+                    break
+                raise
+
+            thread = threading.Thread(
+                target=handle_client,
+                args=(client, address),
+                daemon=True,
+                name=f"pg-client-{address[0]}-{address[1]}",
+            )
+            thread.start()
+
+    except KeyboardInterrupt:
+        stop_event.set()
+
+    finally:
+        close_socket(server)
+
+    print("[OK] Portail PostgreSQL arrêté.")
+
+
+# ---------------------------------------------------------------------------
+# Main
+# ---------------------------------------------------------------------------
+
+
+def main() -> int:
+    if not test_ssh_alias():
+        return 1
+
+    run_server()
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
