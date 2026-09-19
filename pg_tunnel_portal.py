@@ -215,12 +215,14 @@ def build_remote_command() -> str:
       - écrit stdout (réponses PostgreSQL vers le PC).
     """
     remote_program = f"""
+import os
 import socket
 import sys
 import threading
 
 HOST = {REMOTE_HOST!r}
 PORT = {REMOTE_PORT!r}
+BUFFER_SIZE = {BUFFER_SIZE}
 
 sock = socket.create_connection((HOST, PORT), timeout={SOCKET_TIMEOUT!r})
 sock.settimeout(None)
@@ -228,27 +230,28 @@ sock.settimeout(None)
 def client_to_database():
     try:
         while True:
-            data = sys.stdin.buffer.read({BUFFER_SIZE})
+            # os.read() retourne les octets disponibles immédiatement.
+            # Contrairement à file.read(N), il n'attend pas d'avoir N octets.
+            data = os.read(0, BUFFER_SIZE)
             if not data:
                 break
             sock.sendall(data)
-    except Exception:
+    except (BrokenPipeError, ConnectionResetError, OSError):
         pass
     finally:
         try:
             sock.shutdown(socket.SHUT_WR)
-        except Exception:
+        except OSError:
             pass
 
 def database_to_client():
     try:
         while True:
-            data = sock.recv({BUFFER_SIZE})
+            data = sock.recv(BUFFER_SIZE)
             if not data:
                 break
-            sys.stdout.buffer.write(data)
-            sys.stdout.buffer.flush()
-    except Exception:
+            os.write(1, data)
+    except (BrokenPipeError, ConnectionResetError, OSError):
         pass
 
 thread_up = threading.Thread(target=client_to_database, daemon=True)
@@ -262,7 +265,7 @@ thread_down.join()
 
 try:
     sock.close()
-except Exception:
+except OSError:
     pass
 """.strip()
 
