@@ -10,8 +10,6 @@ services:
     envVars:
       - key: DATABASE_URL
         sync: false
-      - key: GEE_SERVICE_ACCOUNT_JSON
-        sync: false
       - key: GEE_PROJECT
         sync: false
       - key: GEE_AUTH_MODE
