@@ -1,196 +1,138 @@
-=======================================================================================
-[TEST] 1/9 - Environnement Python et bibliothèques
-========================================================================================
-INFO Python      : 3.13.15 (main, Sep  1 2026, 07:11:56) [GCC 12.2.0]
-INFO Executable  : /home/tsikynyantsa/jerymotro_gee_fire_context_labeling/venv/bin/python3
-INFO Plateforme  : Linux-6.18.52-alwaysdata-x86_64-with-glibc2.36
-INFO OpenSSL     : OpenSSL 3.0.20 7 Apr 2026
-OK   earthengine-api : 1.7.43
-OK   requests         : 2.34.2
-OK   python-dotenv    : version inconnue
-OK   google-api-python-client : version inconnue
-OK   google-auth : 2.58.0
-========================================================================================
-[TEST] 2/9 - Chargement du .env et des variables GEE
-========================================================================================
-OK   .env trouvé : /home/tsikynyantsa/jerymotro_gee_fire_context_labeling/.env
-INFO GEE_AUTH_MODE=service_account
-INFO GEE_SERVICE_ACCOUNT_JSON_PATH=/home/tsikynyantsa/jerymotro_gee_fire_context_labeling/service-account.json
-INFO GEE_PROJECT_ID=<non défini>
-INFO GOOGLE_CLOUD_PROJECT=<non défini>
-INFO GOOGLE_APPLICATION_CREDENTIALS=<non défini>
-OK   Mode d'authentification effectivement sélectionné : service_account
-========================================================================================
-[TEST] 3/9 - Vérification de la configuration effective
-========================================================================================
-INFO Chemin credentials : /home/tsikynyantsa/jerymotro_gee_fire_context_labeling/service-account.json
-OK   Le fichier Service Account existe et est un fichier normal.
-WARN Aucun GEE_PROJECT_ID / GOOGLE_CLOUD_PROJECT dans l'environnement. Le script tentera d'utiliser project_id du JSON.
-========================================================================================
-[TEST] 4/9 - Lecture et validation du JSON Service Account
-========================================================================================
-OK   type           = service_account
-OK   project_id     = antigravitygcp-499308
-OK   client_email   = jm-vl-543@antigravitygcp-499308.iam.gserviceaccount.com
-OK   private_key_id = présent
-OK   private_key    = présente (contenu masqué)
-OK   token_uri      = https://oauth2.googleapis.com/token
-OK   Projet sélectionné depuis le JSON : antigravitygcp-499308
-OK   Credentials Google créées avec succès.
-INFO Credentials principal : jm-vl-543@antigravitygcp-499308.iam.gserviceaccount.com
-INFO Scopes configurés     : https://www.googleapis.com/auth/earthengine
-INFO Quota project         : None
-========================================================================================
-[TEST] 5/9 - Test réel du token OAuth2 du Service Account
-========================================================================================
-OK   Le Service Account a obtenu un access token OAuth2.
-INFO Token obtenu : oui (longueur=1024)
-INFO Expiration     : 2026-09-19T12:21:16.047383
-========================================================================================
-[TEST] 6/9 - Test DNS / TCP / TLS vers earthengine.googleapis.com
-========================================================================================
-OK   DNS résolu : 172.217.112.4, 172.217.113.4, 172.217.114.4, 172.217.115.4, 172.217.116.4, 172.217.117.4, 172.217.118.4, 172.217.119.4, 2001:4860:4840:400::, 2001:4860:4841:400::, 2001:4860:4842:400::, 2001:4860:4843:400::, 2001:4860:4844:400::, 2001:4860:4845:400::, 2001:4860:4846:400::, 2001:4860:4847:400::
-OK   Connexion TCP/TLS réussie (TLS=TLSv1.3, cipher=TLS_AES_256_GCM_SHA384).
-========================================================================================
-[TEST] 7/9 - Test HTTP direct du document de découverte Earth Engine
-========================================================================================
-INFO SANS Authorization: HTTP 403, Content-Type='text/html; charset=UTF-8', Final-URL='https://earthengine.googleapis.com/$discovery/rest?version=v1&prettyPrint=false'
-INFO SANS Authorization: corps (800 premiers caractères) = '<!DOCTYPE html> <html lang=en>   <meta charset=utf-8>   <meta name=viewport content="initial-scale=1, minimum-scale=1, width=device-width">   <title>Error 403 (Forbidden)!!1</title>   <style>     *{margin:0;padding:0}html,code{font:15px/22px arial,sans-serif}html{background:#fff;color:#222;padding:15px}body{margin:7% auto 0;max-width:390px;min-height:180px;padding:30px 0 15px}* > body{background:url(//www.google.com/images/errors/robot.png) 100% 5px no-repeat;padding-right:205px}p{margin:11px 0 22px;overflow:hidden}ins{color:#777;text-decoration:none}a img{border:0}@media screen and (max-width:772px){body{background:none;margin-top:0;max-width:none;padding-right:0}}#logo{background:url(//www.google.com/images/branding/googlelogo/1x/googlelogo_color_150x54dp.png) no-repeat;margin-left:-5px}'
-WARN Earth Engine répond HTTP 403 sans authorization. C'est cohérent avec l'erreur actuelle de googleapiclient.
-INFO AVEC Authorization: HTTP 403, Content-Type='text/html; charset=UTF-8', Final-URL='https://earthengine.googleapis.com/$discovery/rest?version=v1&prettyPrint=false'
-INFO AVEC Authorization: corps (800 premiers caractères) = '<!DOCTYPE html> <html lang=en>   <meta charset=utf-8>   <meta name=viewport content="initial-scale=1, minimum-scale=1, width=device-width">   <title>Error 403 (Forbidden)!!1</title>   <style>     *{margin:0;padding:0}html,code{font:15px/22px arial,sans-serif}html{background:#fff;color:#222;padding:15px}body{margin:7% auto 0;max-width:390px;min-height:180px;padding:30px 0 15px}* > body{background:url(//www.google.com/images/errors/robot.png) 100% 5px no-repeat;padding-right:205px}p{margin:11px 0 22px;overflow:hidden}ins{color:#777;text-decoration:none}a img{border:0}@media screen and (max-width:772px){body{background:none;margin-top:0;max-width:none;padding-right:0}}#logo{background:url(//www.google.com/images/branding/googlelogo/1x/googlelogo_color_150x54dp.png) no-repeat;margin-left:-5px}'
-WARN Earth Engine répond HTTP 403 avec authorization. C'est cohérent avec l'erreur actuelle de googleapiclient.
-========================================================================================
-[TEST] 8/9 - Test de ee.Initialize()
-========================================================================================
-INFO Projet transmis à ee.Initialize : antigravitygcp-499308
-FAIL ee.Initialize(): HttpError: <HttpError 403 when requesting https://earthengine.googleapis.com/$discovery/rest?version=v1&prettyPrint=false returned "Ok". Details: "<!DOCTYPE html>
-<html lang=en>
-  <meta charset=utf-8>
-  <meta name=viewport content="initial-scale=1, minimum-scale=1, width=device-width">
-  <title>Error 403 (Forbidden)!!1</title>
-  <style>
-    *{margin:0;padding:0}html,code{font:15px/22px arial,sans-serif}html{background:#fff;color:#222;padding:15px}body{margin:7% auto 0;max-width:390px;min-height:180px;padding:30px 0 15px}* > body{background:url(//www.google.com/images/errors/robot.png) 100% 5px no-repeat;padding-right:205px}p{margin:11px 0 22px;overflow:hidden}ins{color:#777;text-decoration:none}a img{border:0}@media screen and (max-width:772px){body{background:none;margin-top:0;max-width:none;padding-right:0}}#logo{background:url(//www.google.com/images/branding/googlelogo/1x/googlelogo_color_150x54dp.png) no-repeat;margin-left:-5px}@media only screen and (min-resolution:192dpi){#logo{background:url(//www.google.com/images/branding/googlelogo/2x/googlelogo_color_150x54dp.png) no-repeat 0% 0%/100% 100%;-moz-border-image:url(//www.google.com/images/branding/googlelogo/2x/googlelogo_color_150x54dp.png) 0}}@media only screen and (-webkit-min-device-pixel-ratio:2){#logo{background:url(//www.google.com/images/branding/googlelogo/2x/googlelogo_color_150x54dp.png) no-repeat;-webkit-background-size:100% 100%}}#logo{display:inline-block;height:54px;width:150px}
-  </style>
-  <a href=//www.google.com/><span id=logo aria-label=Google></span></a>
-  <p><b>403.</b> <ins>That’s an error.</ins>
-  <p>Your client does not have permission to get URL <code>/$discovery/rest</code> from this server.  <ins>That’s all we know.</ins>
-">
-      Traceback complet :
-Traceback (most recent call last):
-  File "/home/tsikynyantsa/jerymotro_gee_fire_context_labeling/debug_gee.py", line 448, in _test_ee_initialize
-    ee.Initialize(
-    ~~~~~~~~~~~~~^
-        credentials=self.credentials,
-        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-        project=project,
-        ^^^^^^^^^^^^^^^^
-    )
-    ^
-  File "/home/tsikynyantsa/jerymotro_gee_fire_context_labeling/venv/lib/python3.13/site-packages/ee/_utils.py", line 39, in wrapper
-    return func(*args, **kwargs)
-  File "/home/tsikynyantsa/jerymotro_gee_fire_context_labeling/venv/lib/python3.13/site-packages/ee/__init__.py", line 242, in Initialize
-    data.initialize(
-    ~~~~~~~~~~~~~~~^
-        credentials=credentials,
-        ^^^^^^^^^^^^^^^^^^^^^^^^
-    ...<5 lines>...
-        http_transport=http_transport,
-        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    )
-    ^
-  File "/home/tsikynyantsa/jerymotro_gee_fire_context_labeling/venv/lib/python3.13/site-packages/ee/data.py", line 189, in initialize
-    _install_cloud_api_resource()
-    ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
-  File "/home/tsikynyantsa/jerymotro_gee_fire_context_labeling/venv/lib/python3.13/site-packages/ee/data.py", line 263, in _install_cloud_api_resource
-    state.cloud_api_resource = _cloud_api_utils.build_cloud_resource(
-                               ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
-        state.cloud_api_base_url,  # pyrefly: ignore[bad-argument-type]
-        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    ...<7 lines>...
-        http_transport=state.http_transport,
-        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    )
-    ^
-  File "/home/tsikynyantsa/jerymotro_gee_fire_context_labeling/venv/lib/python3.13/site-packages/ee/_cloud_api_utils.py", line 217, in build_cloud_resource
-    resource = build(static_discovery=False)
-  File "/home/tsikynyantsa/jerymotro_gee_fire_context_labeling/venv/lib/python3.13/site-packages/ee/_cloud_api_utils.py", line 200, in build
-    return discovery.build(
-           ~~~~~~~~~~~~~~~^
-        'earthengine',
-        ^^^^^^^^^^^^^^
-    ...<7 lines>...
-        num_retries=num_retries,
-        ^^^^^^^^^^^^^^^^^^^^^^^^
-        **kwargs)  # pytype: disable=wrong-keyword-args
-        ^^^^^^^^^
-  File "/home/tsikynyantsa/jerymotro_gee_fire_context_labeling/venv/lib/python3.13/site-packages/googleapiclient/_helpers.py", line 130, in positional_wrapper
-    return wrapped(*args, **kwargs)
-  File "/home/tsikynyantsa/jerymotro_gee_fire_context_labeling/venv/lib/python3.13/site-packages/googleapiclient/discovery.py", line 334, in build
-    raise e
-  File "/home/tsikynyantsa/jerymotro_gee_fire_context_labeling/venv/lib/python3.13/site-packages/googleapiclient/discovery.py", line 305, in build
-    content = _retrieve_discovery_doc(
-        requested_url,
-    ...<7 lines>...
-        static_discovery=static_discovery,
-    )
-  File "/home/tsikynyantsa/jerymotro_gee_fire_context_labeling/venv/lib/python3.13/site-packages/googleapiclient/discovery.py", line 440, in _retrieve_discovery_doc
-    resp, content = req.execute(num_retries=num_retries)
-                    ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/tsikynyantsa/jerymotro_gee_fire_context_labeling/venv/lib/python3.13/site-packages/googleapiclient/_helpers.py", line 130, in positional_wrapper
-    return wrapped(*args, **kwargs)
-  File "/home/tsikynyantsa/jerymotro_gee_fire_context_labeling/venv/lib/python3.13/site-packages/googleapiclient/http.py", line 1018, in execute
-    raise HttpError(resp, content, uri=self.uri)
-googleapiclient.errors.HttpError: <HttpError 403 when requesting https://earthengine.googleapis.com/$discovery/rest?version=v1&prettyPrint=false returned "Ok". Details: "<!DOCTYPE html>
-<html lang=en>
-  <meta charset=utf-8>
-  <meta name=viewport content="initial-scale=1, minimum-scale=1, width=device-width">
-  <title>Error 403 (Forbidden)!!1</title>
-  <style>
-    *{margin:0;padding:0}html,code{font:15px/22px arial,sans-serif}html{background:#fff;color:#222;padding:15px}body{margin:7% auto 0;max-width:390px;min-height:180px;padding:30px 0 15px}* > body{background:url(//www.google.com/images/errors/robot.png) 100% 5px no-repeat;padding-right:205px}p{margin:11px 0 22px;overflow:hidden}ins{color:#777;text-decoration:none}a img{border:0}@media screen and (max-width:772px){body{background:none;margin-top:0;max-width:none;padding-right:0}}#logo{background:url(//www.google.com/images/branding/googlelogo/1x/googlelogo_color_150x54dp.png) no-repeat;margin-left:-5px}@media only screen and (min-resolution:192dpi){#logo{background:url(//www.google.com/images/branding/googlelogo/2x/googlelogo_color_150x54dp.png) no-repeat 0% 0%/100% 100%;-moz-border-image:url(//www.google.com/images/branding/googlelogo/2x/googlelogo_color_150x54dp.png) 0}}@media only screen and (-webkit-min-device-pixel-ratio:2){#logo{background:url(//www.google.com/images/branding/googlelogo/2x/googlelogo_color_150x54dp.png) no-repeat;-webkit-background-size:100% 100%}}#logo{display:inline-block;height:54px;width:150px}
-  </style>
-  <a href=//www.google.com/><span id=logo aria-label=Google></span></a>
-  <p><b>403.</b> <ins>That’s an error.</ins>
-  <p>Your client does not have permission to get URL <code>/$discovery/rest</code> from this server.  <ins>That’s all we know.</ins>
-">
-
-      DIAGNOSTIC IMPORTANT : l'erreur ci-dessus est volontairement isolée de l'application JeryMotro.
-      Le 403 survient pendant la récupération du document de découverte Google API. Comparez surtout les résultats des tests 5, 6 et 7.
-========================================================================================
-[TEST] 9/9 - Test d'une requête Earth Engine après initialisation
-========================================================================================
-FAIL Requête GEE minimale: EEException: Earth Engine client library not initialized. See http://goo.gle/ee-auth.
-      Traceback complet :
-Traceback (most recent call last):
-  File "/home/tsikynyantsa/jerymotro_gee_fire_context_labeling/debug_gee.py", line 473, in _test_ee_request
-    result = ee.Number(1).add(1).getInfo()
-             ~~~~~~~~~^^^
-  File "/home/tsikynyantsa/jerymotro_gee_fire_context_labeling/venv/lib/python3.13/site-packages/ee/computedobject.py", line 29, in __call__
-    return type.__call__(cls, *args, **kwargs)
-           ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/tsikynyantsa/jerymotro_gee_fire_context_labeling/venv/lib/python3.13/site-packages/ee/ee_number.py", line 32, in __init__
-    self.initialize()
-    ~~~~~~~~~~~~~~~^^
-  File "/home/tsikynyantsa/jerymotro_gee_fire_context_labeling/venv/lib/python3.13/site-packages/ee/ee_number.py", line 48, in initialize
-    apifunction.ApiFunction.importApi(cls, cls.name(), cls.name())
-    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/tsikynyantsa/jerymotro_gee_fire_context_labeling/venv/lib/python3.13/site-packages/ee/_utils.py", line 39, in wrapper
-    return func(*args, **kwargs)
-  File "/home/tsikynyantsa/jerymotro_gee_fire_context_labeling/venv/lib/python3.13/site-packages/ee/apifunction.py", line 199, in importApi
-    cls.initialize()
-    ~~~~~~~~~~~~~~^^
-  File "/home/tsikynyantsa/jerymotro_gee_fire_context_labeling/venv/lib/python3.13/site-packages/ee/apifunction.py", line 163, in initialize
-    signatures = data.getAlgorithms()
-  File "/home/tsikynyantsa/jerymotro_gee_fire_context_labeling/venv/lib/python3.13/site-packages/ee/data.py", line 1440, in getAlgorithms
-    _get_cloud_projects()
-    ~~~~~~~~~~~~~~~~~~~^^
-  File "/home/tsikynyantsa/jerymotro_gee_fire_context_labeling/venv/lib/python3.13/site-packages/ee/data.py", line 292, in _get_cloud_projects
-    raise ee_exception.EEException(_NOT_INITIALIZED_MESSAGE)
-ee.ee_exception.EEException: Earth Engine client library not initialized. See http://goo.gle/ee-auth.
-
-      INTERPRETATION : si ee.Initialize() réussit mais ce test échoue, l'initialisation est bonne et le problème se situe au niveau de l'API Earth Engine / projet / permissions / réseau.
-========================================================================================
-RESULTAT : ECHEC - au moins un test critique a échoué.
-Les blocs FAIL ci-dessus indiquent l'étape exacte à corriger.
 tsikynyantsa@ssh1 ~/jerymotro_gee_fire_context_labeling
- % 
+ % cd ~/jerymotro_gee_fire_context_labeling
+source venv/bin/activate
+
+python - <<'PY'
+import sys
+import ee
+import googleapiclient
+import google.auth
+import httplib2
+
+print("Python:", sys.version)
+print("earthengine-api:", getattr(ee, "__version__", "unknown"))
+print("ee:", ee.__file__)
+print("google-api-python-client:", getattr(googleapiclient, "__version__", "unknown"))
+print("google-auth:", google.auth.__version__)
+print("httplib2:", httplib2.__version__)
+PY
+
+python -m pip show earthengine-api google-api-python-client google-auth httplib2
+Python: 3.13.15 (main, Sep  1 2026, 07:11:56) [GCC 12.2.0]
+earthengine-api: 1.7.43
+ee: /home/tsikynyantsa/jerymotro_gee_fire_context_labeling/venv/lib/python3.13/site-packages/ee/__init__.py
+google-api-python-client: unknown
+google-auth: 2.58.0
+httplib2: 0.32.0
+Name: earthengine-api
+Version: 1.7.43
+Summary: Earth Engine Python API
+Home-page: http://code.google.com/p/earthengine-api
+Author: 
+Author-email: Google LLC <noreply@google.com>
+License: Apache-2.0
+Location: /home/tsikynyantsa/jerymotro_gee_fire_context_labeling/venv/lib/python3.13/site-packages
+Requires: google-api-python-client, google-auth, google-auth-httplib2, google-cloud-storage, httplib2, requests
+Required-by: 
+---
+Name: google-api-python-client
+Version: 2.200.0
+Summary: Google API Client Library for Python
+Home-page: https://github.com/googleapis/google-api-python-client/
+Author: Google LLC
+Author-email: googleapis-packages@google.com
+License: Apache 2.0
+Location: /home/tsikynyantsa/jerymotro_gee_fire_context_labeling/venv/lib/python3.13/site-packages
+Requires: google-api-core, google-auth, google-auth-httplib2, httplib2, uritemplate
+Required-by: earthengine-api
+---
+Name: google-auth
+Version: 2.58.0
+Summary: Google Authentication Library
+Home-page: https://github.com/googleapis/google-cloud-python/tree/main/packages/google-auth
+Author: Google Cloud Platform
+Author-email: googleapis-packages@google.com
+License: Apache 2.0
+Location: /home/tsikynyantsa/jerymotro_gee_fire_context_labeling/venv/lib/python3.13/site-packages
+Requires: cryptography, pyasn1-modules
+Required-by: earthengine-api, google-api-core, google-api-python-client, google-auth-httplib2, google-cloud-core, google-cloud-storage
+---
+Name: httplib2
+Version: 0.32.0
+Summary: A comprehensive HTTP client library.
+Home-page: https://github.com/httplib2/httplib2
+Author: Joe Gregorio
+Author-email: joe@bitworking.org
+License: MIT
+Location: /home/tsikynyantsa/jerymotro_gee_fire_context_labeling/venv/lib/python3.13/site-packages
+Requires: pyparsing
+Required-by: earthengine-api, google-api-python-client, google-auth-httplib2
+-------------------------------------
+############################"""
+/media/t/MON/P/Unet-jerymotro main ........... 1m 1s py Unet-jerymotro 02:54:31 
+> python3 - <<'PY'
+import sys
+import ee
+import googleapiclient
+import google.auth
+import httplib2
+
+print("Python:", sys.version)
+print("earthengine-api:", getattr(ee, "__version__", "unknown"))
+print("ee:", ee.__file__)
+print("google-api-python-client:", getattr(googleapiclient, "__version__", "unknown"))
+print("google-auth:", google.auth.__version__)
+print("httplib2:", httplib2.__version__)
+PY
+
+python3 -m pip show earthengine-api google-api-python-client google-auth httplib2 
+Python: 3.12.3 (main, Jul 15 2026, 23:46:41) [GCC 13.3.0]
+earthengine-api: 1.7.43
+ee: /media/tsiky-ny-antsa/MON/ProjectJerymotro/Unet-jerymotro/venv/lib/python3.12/site-packages/ee/__init__.py
+google-api-python-client: unknown
+google-auth: 2.58.0
+httplib2: 0.32.0
+Name: earthengine-api
+Version: 1.7.43
+Summary: Earth Engine Python API
+Home-page: 
+Author: 
+Author-email: Google LLC <noreply@google.com>
+License: Apache-2.0
+Location: /media/tsiky-ny-antsa/MON/ProjectJerymotro/Unet-jerymotro/venv/lib/python3.12/site-packages
+Requires: google-api-python-client, google-auth, google-auth-httplib2, google-cloud-storage, httplib2, requests
+Required-by: eerepr, geemap, xee
+---
+Name: google-api-python-client
+Version: 2.200.0
+Summary: Google API Client Library for Python
+Home-page: https://github.com/googleapis/google-api-python-client/
+Author: Google LLC
+Author-email: googleapis-packages@google.com
+License: Apache 2.0
+Location: /media/tsiky-ny-antsa/MON/ProjectJerymotro/Unet-jerymotro/venv/lib/python3.12/site-packages
+Requires: google-api-core, google-auth, google-auth-httplib2, httplib2, uritemplate
+Required-by: earthengine-api
+---
+Name: google-auth
+Version: 2.58.0
+Summary: Google Authentication Library
+Home-page: https://github.com/googleapis/google-cloud-python/tree/main/packages/google-auth
+Author: Google Cloud Platform
+Author-email: googleapis-packages@google.com
+License: Apache 2.0
+Location: /media/tsiky-ny-antsa/MON/ProjectJerymotro/Unet-jerymotro/venv/lib/python3.12/site-packages
+Requires: cryptography, pyasn1-modules
+Required-by: earthengine-api, google-api-core, google-api-python-client, google-auth-httplib2, google-cloud-core, google-cloud-storage
+---
+Name: httplib2
+Version: 0.32.0
+Summary: A comprehensive HTTP client library.
+Home-page: https://github.com/httplib2/httplib2
+Author: Joe Gregorio
+Author-email: joe@bitworking.org
+License: MIT
+Location: /media/tsiky-ny-antsa/MON/ProjectJerymotro/Unet-jerymotro/venv/lib/python3.12/site-packages
+Requires: pyparsing
+Required-by: earthengine-api, google-api-python-client, google-auth-httplib2
+
