@@ -1,16 +1,32 @@
 services:
-  - type: web
-    name: jerymotro-pg-websocket-gateway
-    runtime: python
-    plan: free
-    buildCommand: pip install -r requirements-render.txt
-    startCommand: uvicorn pg_websocket_gateway:app --host 0.0.0.0 --port $PORT
-    healthCheckPath: /health
+  - type: cron
+    name: jerymotro-gee-fire-context
+    runtime: docker
+    plan: starter
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    schedule: "0 */6 * * *"
     autoDeploy: true
     envVars:
-      - key: PG_GATEWAY_TOKEN
-        generateValue: true
-      - key: PG_REMOTE_HOST
-        value: jerymotro-numb-ghost-pooler.sage.cloud.layerbase.dev
-      - key: PG_REMOTE_PORT
-        value: "5432"
+      - key: DATABASE_URL
+        sync: false
+      - key: GEE_SERVICE_ACCOUNT_JSON
+        sync: false
+      - key: GEE_PROJECT
+        sync: false
+      - key: GEE_AUTH_MODE
+        value: service_account
+      - key: ENABLE_AUTO_LABELING
+        value: "false"
+      - key: DB_BATCH_SIZE
+        value: "200"
+      - key: GEE_BATCH_SIZE
+        value: "200"
+      - key: MAX_RECORDS_PER_RUN
+        value: ""
+      - key: REGION_FILTER
+        value: ""
+      - key: SYNC_LANDCOVER_COLUMN
+        value: "false"
+      - key: LOG_LEVEL
+        value: INFO
