@@ -16,7 +16,7 @@ from typing import Any
 
 from fastapi import FastAPI, Query
 from fastapi.responses import HTMLResponse, JSONResponse
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 
 from gee_fire_context_labeling import (
     load_config,
@@ -117,9 +117,13 @@ SERVICE_STATE: dict[str, Any] = {
     "last_error": None,
     "total_processed": 0,
     "total_labeled": 0,
+    "cycle_total": None,
+    "cycle_started_at": None,
     "current_batch": 0,
     "current_batch_labeled": 0,
     "next_run_in_seconds": None,
+    "eta_seconds": None,
+    "rate_per_minute": None,
 }
 
 
@@ -229,6 +233,16 @@ DASHBOARD_HTML = r"""
     .dot.amber { background:var(--amber); box-shadow:0 0 0 4px rgba(244,189,79,.1); }
     .dot.red { background:var(--red); box-shadow:0 0 0 4px rgba(255,107,118,.1); }
     .grid { display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:12px; }
+    .hero-progress { margin-bottom:12px; }
+    .progress-head { display:flex; align-items:center; justify-content:space-between; gap:20px; }
+    .progress-main { display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; }
+    .progress-main strong { font-size:clamp(30px,5vw,48px); letter-spacing:-.05em; }
+    .progress-main span { color:var(--muted); font-size:13px; }
+    .eta-box { min-width:180px; text-align:right; }
+    .eta-box strong { display:block; font-size:18px; margin-top:4px; }
+    .progress.large { height:12px; margin-top:16px; }
+    .progress-meta { display:flex; justify-content:space-between; gap:12px; margin-top:9px; color:var(--muted); font-size:12px; }
+    .progress-meta strong { color:var(--text); }
     .card {
       background:linear-gradient(180deg, rgba(17,21,26,.94), rgba(13,17,22,.94));
       border:1px solid var(--border); border-radius:16px; padding:16px; box-shadow:var(--shadow);
@@ -262,7 +276,7 @@ DASHBOARD_HTML = r"""
       padding:7px 10px; cursor:pointer;
     }
     button:hover { background:#1a2027; }
-    @media (max-width: 900px) { .grid { grid-template-columns:repeat(2,1fr); } .layout { grid-template-columns:1fr; } .logs { height:430px; } }
+    @media (max-width: 900px) { .grid { grid-template-columns:repeat(2,1fr); } .layout { grid-template-columns:1fr; } .logs { height:430px; } .progress-head { align-items:flex-start; flex-direction:column; } .eta-box { text-align:left; } }
     @media (max-width: 580px) { .wrap { width:min(100% - 20px, 1180px); padding-top:18px; } header { align-items:flex-start; } .grid { grid-template-columns:1fr 1fr; } }
   </style>
 </head>
@@ -276,6 +290,25 @@ DASHBOARD_HTML = r"""
       </div>
       <div class="status-pill"><span class="dot" id="statusDot"></span><span id="statusText">Connexion…</span></div>
     </header>
+
+    <section class="hero-progress card">
+      <div class="progress-head">
+        <div>
+          <div class="label">Avancement du cycle</div>
+          <div class="progress-main"><strong id="progressPercent">0%</strong><span id="progressText">Préparation du traitement…</span></div>
+        </div>
+        <div class="eta-box">
+          <span class="label">Temps restant estimé</span>
+          <strong id="eta">Calcul en cours…</strong>
+        </div>
+      </div>
+      <div class="progress large"><div id="globalProgress"></div></div>
+      <div class="progress-meta">
+        <span><strong id="progressDone">0</strong> traitées</span>
+        <span>sur <strong id="progressTotal">0</strong></span>
+        <span id="rate">— détections/min</span>
+      </div>
+    </section>
 
     <section class="grid">
       <div class="card"><div class="label">Worker</div><div class="value small" id="workerState">—</div></div>
@@ -363,6 +396,27 @@ async function refresh() {
     document.getElementById("workerState").textContent = stateLabel(s.worker);
     document.getElementById("cycleState").textContent = stateLabel(s.cycle);
     document.getElementById("processed").textContent = Number(s.total_processed || 0).toLocaleString("fr-FR");
+    document.getElementById("progressPercent").textContent = s.progress_percent == null ? "—" : Number(s.progress_percent).toLocaleString("fr-FR", {minimumFractionDigits: 0, maximumFractionDigits: 1}) + "%";
+    document.getElementById("progressDone").textContent = Number(s.total_processed || 0).toLocaleString("fr-FR");
+    document.getElementById("progressTotal").textContent = Number(s.cycle_total || 0).toLocaleString("fr-FR");
+    document.getElementById("progressText").textContent = s.progress_percent == null ? "Préparation du traitement…" : (s.progress_percent >= 100 ? "Cycle terminé" : "Traitement en cours");
+    document.getElementById("globalProgress").style.transform = "scaleX(" + Math.min(1, Math.max(0, (s.progress_percent || 0) / 100)) + ")";
+
+    const eta = Number(s.eta_seconds);
+    if (s.progress_percent >= 100) {
+      document.getElementById("eta").textContent = "Terminé";
+    } else if (eta > 0) {
+      const hours = Math.floor(eta / 3600);
+      const minutes = Math.floor((eta % 3600) / 60);
+      const seconds = eta % 60;
+      document.getElementById("eta").textContent =
+        hours > 0 ? hours + " h " + String(minutes).padStart(2, "0") + " min" :
+        minutes > 0 ? minutes + " min " + String(seconds).padStart(2, "0") + " s" :
+        seconds + " s";
+    } else {
+      document.getElementById("eta").textContent = "Calcul en cours…";
+    }
+    document.getElementById("rate").textContent = s.rate_per_minute ? Number(s.rate_per_minute).toLocaleString("fr-FR") + " détections/min" : "— détections/min";
     document.getElementById("labeled").textContent = Number(s.total_labeled || 0).toLocaleString("fr-FR");
     document.getElementById("started").textContent = fmtDate(s.started_at);
     document.getElementById("activity").textContent = fmtDate(s.last_activity);
@@ -414,6 +468,34 @@ def dashboard() -> HTMLResponse:
 def status() -> dict[str, Any]:
     with STATE_LOCK:
         snapshot = dict(SERVICE_STATE)
+
+    target = snapshot.get("cycle_total")
+    processed = int(snapshot.get("total_processed") or 0)
+    started_at = snapshot.get("cycle_started_at")
+
+    if target is not None:
+        snapshot["progress_percent"] = round(
+            min(100.0, max(0.0, (processed / target * 100.0) if target else 100.0)),
+            1,
+        )
+        remaining = max(0, int(target) - processed)
+        if started_at and processed > 0 and remaining > 0:
+            try:
+                started = datetime.fromisoformat(started_at)
+                elapsed_seconds = max(
+                    1.0,
+                    (datetime.now(timezone.utc) - started).total_seconds(),
+                )
+                rate = processed / (elapsed_seconds / 60.0)
+                snapshot["rate_per_minute"] = round(rate, 1)
+                snapshot["eta_seconds"] = int((remaining / rate) * 60)
+            except (ValueError, TypeError, ZeroDivisionError):
+                snapshot["eta_seconds"] = None
+        elif remaining == 0:
+            snapshot["eta_seconds"] = 0
+    else:
+        snapshot["progress_percent"] = None
+
     snapshot["server"] = "online"
     return snapshot
 
@@ -434,6 +516,24 @@ def health() -> JSONResponse:
 # ---------------------------------------------------------------------------
 # Worker GEE
 # ---------------------------------------------------------------------------
+
+
+def count_pending_detections(engine, region_filter: str | None = None) -> int:
+    """Compte les détections éligibles au début du cycle courant."""
+    params = {}
+    region_clause = ""
+    if region_filter:
+        region_clause = ' AND "region" = :region'
+        params["region"] = region_filter
+
+    query = text(
+        'SELECT COUNT(*) FROM "firms_fire_detections" '
+        'WHERE fire_context_type IS NULL '
+        'AND "latitude" IS NOT NULL AND "longitude" IS NOT NULL'
+        f"{region_clause}"
+    )
+    with engine.connect() as conn:
+        return int(conn.execute(query, params).scalar_one())
 
 
 def labeling_worker() -> None:
@@ -478,6 +578,30 @@ def labeling_worker() -> None:
             engine = create_engine(config.database_url, pool_pre_ping=True, future=True)
 
             logger.info("Vérification du schéma PostgreSQL...")
+
+            cycle_total = count_pending_detections(engine, config.region_filter)
+            cycle_target = (
+                min(cycle_total, config.max_records_per_run)
+                if config.max_records_per_run
+                else cycle_total
+            )
+
+            with STATE_LOCK:
+                SERVICE_STATE["worker"] = "starting"
+                SERVICE_STATE["cycle"] = "preparing"
+                SERVICE_STATE["total_processed"] = 0
+                SERVICE_STATE["total_labeled"] = 0
+                SERVICE_STATE["cycle_total"] = cycle_target
+                SERVICE_STATE["cycle_started_at"] = datetime.now(timezone.utc).isoformat()
+                SERVICE_STATE["current_batch"] = 0
+                SERVICE_STATE["current_batch_labeled"] = 0
+                SERVICE_STATE["eta_seconds"] = None
+                SERVICE_STATE["rate_per_minute"] = None
+
+            logger.info(
+                "Avancement du cycle : %d détection(s) à labelliser.",
+                cycle_target,
+            )
             ensure_columns_exist(engine)
 
             logger.info("Initialisation de Google Earth Engine...")
