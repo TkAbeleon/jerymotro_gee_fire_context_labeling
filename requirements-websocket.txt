@@ -1,2 +1,0 @@
-# Gateway WebSocket PostgreSQL temporaire
-websockets>=15,<18
