@@ -1,0 +1,43 @@
+# --- Environnements Python ---
+venv/
+.venv/
+env/
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# --- Secrets & configuration locale ---
+.env
+.env.*
+!.env.example
+gee_key.json
+gee-key.json
+service-account*.json
+credentials*.json
+*-sa-key.json
+
+# --- Google Earth Engine ---
+.config/earthengine/
+*.ee_credentials
+
+# --- Logs ---
+*.log
+logs/
+
+# --- IDE ---
+.vscode/
+.idea/
+*.swp
+
+# --- OS ---
+.DS_Store
+Thumbs.db
+
+# --- Tests / couverture ---
+.coverage
+htmlcov/
+.pytest_cache/

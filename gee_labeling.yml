@@ -1,0 +1,59 @@
+name: GEE Fire Context Labeling
+
+# Déclenchement :
+#   - CRON régulier (toutes les 6 heures)
+#   - Manuel via l'onglet "Actions" (workflow_dispatch)
+on:
+  schedule:
+    - cron: "0 */6 * * *"
+  workflow_dispatch:
+    inputs:
+      max_records:
+        description: "Nombre max de détections à traiter (optionnel)"
+        required: false
+        default: ""
+
+concurrency:
+  group: gee-fire-context-labeling
+  cancel-in-progress: false
+
+jobs:
+  labeling:
+    name: Enrichissement GEE des détections FIRMS
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout du dépôt
+        uses: actions/checkout@v4
+
+      - name: Configuration de Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Installation des dépendances
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Écriture de la clé de Service Account GEE
+        # Le secret GEE_SERVICE_ACCOUNT_JSON contient le contenu COMPLET du
+        # fichier JSON de credentials du Service Account Google Earth Engine.
+        run: |
+          echo '${{ secrets.GEE_SERVICE_ACCOUNT_JSON }}' > "${{ runner.temp }}/gee_key.json"
+
+      - name: Exécution du job de labellisation
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          GEE_SERVICE_ACCOUNT_JSON_PATH: ${{ runner.temp }}/gee_key.json
+          ENABLE_AUTO_LABELING: "true"
+          MAX_RECORDS_PER_RUN: ${{ github.event.inputs.max_records }}
+          LOG_LEVEL: "INFO"
+        run: |
+          python gee_fire_context_labeling.py --once
+
+      - name: Nettoyage des secrets sur disque
+        if: always()
+        run: rm -f "${{ runner.temp }}/gee_key.json"
