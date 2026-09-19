@@ -52,6 +52,7 @@ Il transporte simplement les octets TCP entre PostgreSQL local et distant.
 from __future__ import annotations
 
 import base64
+import os
 import signal
 import shlex
 import socket
@@ -80,7 +81,7 @@ BUFFER_SIZE = 64 * 1024
 SOCKET_TIMEOUT = 30
 
 # Messages SSH éventuels : ne jamais les mélanger au flux PostgreSQL stdout.
-SSH_STDERR = subprocess.DEVNULL
+SSH_STDERR = subprocess.PIPE
 
 
 @dataclass
@@ -333,8 +334,7 @@ def pipe_socket_to_ssh(
             if not data:
                 break
 
-            proc.stdin.write(data)
-            proc.stdin.flush()
+            os.write(proc.stdin.fileno(), data)
             stats.sent_bytes += len(data)
 
     except (BrokenPipeError, ConnectionResetError, OSError):
@@ -357,7 +357,7 @@ def pipe_ssh_to_socket(
 
     try:
         while not stop_event.is_set():
-            data = proc.stdout.read(BUFFER_SIZE)
+            data = os.read(proc.stdout.fileno(), BUFFER_SIZE)
 
             if not data:
                 break
@@ -380,16 +380,38 @@ def handle_client(
 ) -> None:
     stats = ConnectionStats()
     proc: subprocess.Popen[bytes] | None = None
+    stderr_lines: list[str] = []
 
     print(f"[+] Connexion PostgreSQL : {address[0]}:{address[1]}")
+    print("[INFO] Démarrage du relais SSH vers AlwaysData...")
 
     try:
         client.settimeout(None)
 
         proc = start_ssh_process()
 
-        if proc.stdin is None or proc.stdout is None:
-            raise RuntimeError("Impossible d'ouvrir stdin/stdout du processus SSH.")
+        if proc.stdin is None or proc.stdout is None or proc.stderr is None:
+            raise RuntimeError("Impossible d'ouvrir les flux du processus SSH.")
+
+        def read_ssh_stderr() -> None:
+            try:
+                while True:
+                    data = proc.stderr.readline()
+                    if not data:
+                        break
+                    line = data.decode("utf-8", errors="replace").rstrip()
+                    if line:
+                        stderr_lines.append(line)
+                        print(f"[SSH] {line}")
+            except OSError:
+                pass
+
+        stderr_thread = threading.Thread(
+            target=read_ssh_stderr,
+            daemon=True,
+            name="pg-ssh-stderr",
+        )
+        stderr_thread.start()
 
         to_ssh = threading.Thread(
             target=pipe_socket_to_ssh,
@@ -411,6 +433,14 @@ def handle_client(
         to_ssh.join()
         to_client.join()
 
+        return_code = proc.poll()
+        if return_code is not None:
+            print(f"[SSH] Processus terminé avec code {return_code}.")
+        else:
+            print("[SSH] Processus toujours actif après le relais.")
+
+        stderr_thread.join(timeout=1)
+
     except Exception as exc:  # noqa: BLE001
         print(f"[ERREUR] Connexion {address}: {type(exc).__name__}: {exc}")
 
@@ -423,6 +453,10 @@ def handle_client(
         f"PC→PG={stats.sent_bytes} octets | "
         f"PG→PC={stats.received_bytes} octets"
     )
+    if stderr_lines:
+        print("[SSH] Messages reçus :")
+        for line in stderr_lines:
+            print(f"[SSH] {line}")
 
 
 # ---------------------------------------------------------------------------
