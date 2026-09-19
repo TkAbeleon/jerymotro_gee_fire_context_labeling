@@ -453,13 +453,25 @@ def labeling_worker() -> None:
     while True:
         engine = None
         try:
+            # Le service Render est dédié à la collecte automatique.
+            # On force donc l'activation du worker dans le processus HTTP,
+            # même si une ancienne variable Render contient false.
+            raw_auto = os.environ.get("ENABLE_AUTO_LABELING", "").strip().lower()
+            if raw_auto not in {"1", "true", "yes", "on"}:
+                logger.warning(
+                    "ENABLE_AUTO_LABELING=%r détecté dans Render : activation "
+                    "automatique forcée pour le Web Service.",
+                    raw_auto or "<absent>",
+                )
+                os.environ["ENABLE_AUTO_LABELING"] = "true"
+
             config = load_config()
 
             if not config.enable_auto_labeling:
                 with STATE_LOCK:
                     SERVICE_STATE["worker"] = "idle"
                     SERVICE_STATE["cycle"] = "disabled"
-                logger.info("ENABLE_AUTO_LABELING=false : worker arrêté.")
+                logger.error("Le worker automatique n'a pas pu être activé.")
                 return
 
             logger.info("Initialisation de la connexion PostgreSQL du worker...")
