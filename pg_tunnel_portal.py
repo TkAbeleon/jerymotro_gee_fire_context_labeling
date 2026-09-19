@@ -66,7 +66,10 @@ from dataclasses import dataclass
 SSH_ALIAS = "tk"
 
 LOCAL_HOST = "127.0.0.1"
-LOCAL_PORT = 5432
+
+# 0 = demander automatiquement un port TCP libre au système.
+# Cela évite les conflits lorsque le port 5432 local est déjà utilisé.
+LOCAL_PORT = 0
 
 REMOTE_HOST = "jerymotro-numb-ghost-pooler.sage.cloud.layerbase.dev"
 REMOTE_PORT = 5432
@@ -385,6 +388,11 @@ def run_server() -> None:
     try:
         server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         server.bind((LOCAL_HOST, LOCAL_PORT))
+
+        # Récupère le port réellement attribué par le système lorsque
+        # LOCAL_PORT=0.
+        local_port = int(server.getsockname()[1])
+
         server.listen(20)
         server.settimeout(1.0)
     except OSError as exc:
@@ -394,8 +402,8 @@ def run_server() -> None:
             f"{type(exc).__name__}: {exc}"
         )
         print(
-            "[INFO] Vérifiez qu'un autre PostgreSQL ou processus n'utilise pas "
-            "déjà le port 5432."
+            "[INFO] Le système doit normalement choisir automatiquement un port "
+            "libre (LOCAL_PORT=0)."
         )
         raise SystemExit(1) from exc
 
@@ -403,13 +411,21 @@ def run_server() -> None:
     print("=" * 72)
     print(" JERYMOTRO — PORTAIL POSTGRESQL TEMPORAIRE")
     print("=" * 72)
-    print(f" Local      : {LOCAL_HOST}:{LOCAL_PORT}")
+    print(f" Local      : {LOCAL_HOST}:{local_port}")
     print(f" SSH        : {SSH_ALIAS}")
     print(f" PostgreSQL : {REMOTE_HOST}:{REMOTE_PORT}")
     print("=" * 72)
     print()
     print("[OK] Portail démarré.")
-    print("[INFO] Les connexions locales vers 127.0.0.1:5432 seront relayées")
+    print(
+        f"[INFO] Les connexions locales vers {LOCAL_HOST}:{local_port} "
+        "seront relayées"
+    )
+    print(
+        f"[INFO] Exemple psql : "
+        f"postgresql://postgres:MOT_DE_PASSE@{LOCAL_HOST}:{local_port}/jerymotro"
+        "?sslmode=require"
+    )
     print("[INFO] via SSH 'tk' vers le PostgreSQL distant.")
     print("[INFO] Ctrl+C pour arrêter.")
     print()
