@@ -113,6 +113,7 @@ DEFAULT_GEE_BATCH_SIZE = 500
 @dataclass
 class AppConfig:
     database_url: str
+    gee_auth_mode: str
     gee_service_account_json_path: Optional[str]
     enable_auto_labeling: bool
     labeling_cron_expression: Optional[str]
@@ -139,9 +140,18 @@ def load_config() -> AppConfig:
         logger.error("La variable d'environnement DATABASE_URL est obligatoire.")
         sys.exit(1)
 
+    gee_auth_mode = os.environ.get("GEE_AUTH_MODE", "service_account").strip().lower()
+    if gee_auth_mode not in {"service_account", "browser"}:
+        logger.error(
+            "GEE_AUTH_MODE invalide : %s. Valeurs autorisées : service_account, browser.",
+            gee_auth_mode,
+        )
+        sys.exit(1)
+
     config = AppConfig(
         database_url=database_url,
-        gee_service_account_json_path=os.environ.get("GEE_SERVICE_ACCOUNT_JSON_PATH"),
+        gee_auth_mode=gee_auth_mode,
+        gee_service_account_json_path=os.environ.get("GEE_SERVICE_ACCOUNT_JSON_PATH") or None,
         enable_auto_labeling=_str_to_bool(os.environ.get("ENABLE_AUTO_LABELING"), default=False),
         labeling_cron_expression=os.environ.get("LABELING_CRON_EXPRESSION") or None,
         interval_minutes=int(os.environ.get("INTERVAL_MINUTES", "360")),
@@ -226,13 +236,24 @@ def ensure_columns_exist(engine: Engine, table_name: str = TABLE_NAME) -> None:
 # ---------------------------------------------------------------------------
 def initialize_gee(config: AppConfig) -> None:
     """
-    Initialise Earth Engine :
-      - via Service Account (fichier JSON) si GEE_SERVICE_ACCOUNT_JSON_PATH est défini
-        (utilisé en CI/CD, ex: GitHub Actions).
-      - sinon via l'authentification locale standard (ee.Authenticate() déjà effectuée).
+    Initialise Earth Engine.
+
+    Par défaut, l'authentification utilise obligatoirement un Service Account.
+    Le mode navigateur est volontairement opt-in : il faut définir explicitement
+    GEE_AUTH_MODE=browser dans le fichier .env.
     """
     try:
-        if config.gee_service_account_json_path:
+        if config.gee_auth_mode == "service_account":
+            if not config.gee_service_account_json_path:
+                logger.error(
+                    "Authentification GEE par défaut = Service Account, mais "
+                    "GEE_SERVICE_ACCOUNT_JSON_PATH n'est pas défini."
+                )
+                logger.error(
+                    "Définissez GEE_SERVICE_ACCOUNT_JSON_PATH, ou utilisez explicitement "
+                    "GEE_AUTH_MODE=browser dans .env pour l'authentification par navigateur."
+                )
+                sys.exit(1)
             logger.info(
                 "Authentification GEE via Service Account : %s",
                 config.gee_service_account_json_path,
@@ -255,8 +276,12 @@ def initialize_gee(config: AppConfig) -> None:
                 service_account_email, config.gee_service_account_json_path
             )
             ee.Initialize(credentials)
-        else:
-            logger.info("Authentification GEE via l'environnement local standard.")
+        elif config.gee_auth_mode == "browser":
+            logger.info(
+                "Authentification GEE via navigateur demandée explicitement "
+                "(GEE_AUTH_MODE=browser)."
+            )
+            ee.Authenticate()
             ee.Initialize()
 
         logger.info("Earth Engine initialisé avec succès.")
