@@ -110,7 +110,46 @@ if hasattr(creds, "with_quota_project"):
 else:
     print("with_quota_project() indisponible")
 
-section("6. ee.Initialize() ISOLÉ")
+section("6. API REST EARTH ENGINE DIRECTE (SANS DISCOVERY)")
+
+# La documentation officielle expose projects.assets.listAssets en GET.
+# Ce test utilise directement le token OAuth2 afin de séparer le problème
+# du Discovery de l'accès réel à l'API Earth Engine.
+REST_URL = None
+if PROJECT:
+    REST_URL = f"https://earthengine.googleapis.com/v1/projects/{PROJECT}/assets:listAssets?pageSize=1"
+
+if REST_URL:
+    print("URL REST testée:", REST_URL)
+    try:
+        base = httplib2.Http(timeout=20)
+        http = AuthorizedHttp(creds, http=base)
+        response, body = http.request(
+            REST_URL,
+            method="GET",
+            headers={
+                "Accept": "application/json",
+                "User-Agent": "JeryMotro-GEE-Debug/1.0",
+            },
+        )
+        body_text = body.decode("utf-8", errors="replace") if isinstance(body, bytes) else str(body)
+        print("HTTP:", response.status)
+        print("Content-Type:", response.get("content-type"))
+        print("Body:", body_text[:5000])
+        if int(response.status) == 200:
+            print("REST API: OK — le Service Account peut accéder à Earth Engine sans passer par Discovery.")
+        elif int(response.status) == 403:
+            print("REST API: 403 — le problème dépasse le Discovery.")
+        else:
+            print("REST API: statut inattendu.")
+    except Exception as exc:
+        print("REST API ERROR:", type(exc).__name__, exc)
+        traceback.print_exc()
+else:
+    print("REST API: impossible de construire l'URL (PROJECT absent).")
+
+
+section("7. ee.Initialize() ISOLÉ")
 try:
     ee.Initialize(credentials=creds, project=PROJECT)
     print("ee.Initialize: OK")
@@ -120,7 +159,7 @@ except Exception as exc:
     print("\nTRACEBACK COMPLET:")
     traceback.print_exc()
 
-section("7. CONCLUSION AUTOMATIQUE")
+section("8. CONCLUSION AUTOMATIQUE")
 print("Discovery sans credentials :", status_plain)
 print("Discovery avec credentials  :", status_auth)
 print("Discovery sans quota project:", status_stripped)
