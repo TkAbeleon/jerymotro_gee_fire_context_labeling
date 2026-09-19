@@ -115,6 +115,7 @@ class AppConfig:
     database_url: str
     gee_auth_mode: str
     gee_service_account_json_path: Optional[str]
+    gee_project: Optional[str]
     enable_auto_labeling: bool
     labeling_cron_expression: Optional[str]
     interval_minutes: int
@@ -152,6 +153,7 @@ def load_config() -> AppConfig:
         database_url=database_url,
         gee_auth_mode=gee_auth_mode,
         gee_service_account_json_path=os.environ.get("GEE_SERVICE_ACCOUNT_JSON_PATH") or None,
+        gee_project=os.environ.get("GEE_PROJECT") or None,
         enable_auto_labeling=_str_to_bool(os.environ.get("ENABLE_AUTO_LABELING"), default=False),
         labeling_cron_expression=os.environ.get("LABELING_CRON_EXPRESSION") or None,
         interval_minutes=int(os.environ.get("INTERVAL_MINUTES", "360")),
@@ -275,14 +277,29 @@ def initialize_gee(config: AppConfig) -> None:
             credentials = ee.ServiceAccountCredentials(
                 service_account_email, config.gee_service_account_json_path
             )
-            ee.Initialize(credentials)
+            if not config.gee_project:
+                logger.error(
+                    "GEE_PROJECT est obligatoire avec l'authentification Service Account."
+                )
+                logger.error(
+                    "Utilisez le même projet que celui configuré dans Unet-jerymotro "
+                    "(variable GEE_PROJECT)."
+                )
+                sys.exit(1)
+
+            logger.info("Projet Earth Engine utilisé : %s", config.gee_project)
+            ee.Initialize(credentials, project=config.gee_project)
         elif config.gee_auth_mode == "browser":
             logger.info(
                 "Authentification GEE via navigateur demandée explicitement "
                 "(GEE_AUTH_MODE=browser)."
             )
             ee.Authenticate()
-            ee.Initialize()
+            if config.gee_project:
+                logger.info("Projet Earth Engine utilisé : %s", config.gee_project)
+                ee.Initialize(project=config.gee_project)
+            else:
+                ee.Initialize()
 
         logger.info("Earth Engine initialisé avec succès.")
     except Exception:
