@@ -1,13 +1,13 @@
 services:
-  - type: cron
+  - type: web
     name: jerymotro-gee-fire-context
     runtime: docker
     plan: 0.5c-512mb
     branch: main
-    dockerfilePath: ./Dockerfile
+    dockerfilePath: ./docker/render/Dockerfile
     dockerContext: .
-    schedule: "0 */6 * * *"
     autoDeploy: true
+    healthCheckPath: /health
     envVars:
       - key: DATABASE_URL
         sync: false
@@ -15,8 +15,14 @@ services:
         value: antigravitygcp-499308
       - key: GEE_AUTH_MODE
         value: service_account
+      - key: GEE_SERVICE_ACCOUNT_JSON_PATH
+        value: /etc/secrets/gee-service-account.json
       - key: ENABLE_AUTO_LABELING
-        value: "false"
+        value: "true"
+      - key: LABELING_START_DELAY_SECONDS
+        value: "20"
+      - key: INTERVAL_MINUTES
+        value: "360"
       - key: DB_BATCH_SIZE
         value: "200"
       - key: GEE_BATCH_SIZE
