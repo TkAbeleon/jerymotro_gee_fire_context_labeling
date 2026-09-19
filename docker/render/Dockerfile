@@ -12,8 +12,8 @@ RUN python -m pip install --upgrade pip \
     && python -m pip install --no-cache-dir -r /app/requirements.txt
 
 COPY gee_fire_context_labeling.py /app/gee_fire_context_labeling.py
-COPY docker/render/entrypoint.sh /app/entrypoint.sh
+COPY web_server.py /app/web_server.py
 
-RUN chmod 755 /app/entrypoint.sh
+EXPOSE 10000
 
-ENTRYPOINT ["/app/entrypoint.sh"]
+CMD ["uvicorn", "web_server:app", "--host", "0.0.0.0", "--port", "10000"]
