@@ -1,27 +1,16 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Temporary PostgreSQL WebSocket gateway for AlwaysData.
+Temporary PostgreSQL WebSocket gateway for Render.
 
-Architecture:
-    Local PC client
-        |
-        | WSS over HTTPS :443
-        v
-    AlwaysData WebSocket site
-        |
-        | TCP 5432
-        v
-    Layerbase PostgreSQL
+PC -> WSS -> Render -> TCP 5432 -> Layerbase PostgreSQL
 
-The PostgreSQL wire protocol is transported as binary WebSocket messages.
-The gateway does not parse or modify PostgreSQL messages.
+Required:
+    PG_GATEWAY_TOKEN
 
-Environment variables:
-    PG_GATEWAY_TOKEN   required shared secret
-    PG_REMOTE_HOST     default: jerymotro-numb-ghost-pooler.sage.cloud.layerbase.dev
-    PG_REMOTE_PORT     default: 5432
-    PG_WS_PATH         optional, informational only when behind AlwaysData pathUrl
+Optional:
+    PG_REMOTE_HOST
+    PG_REMOTE_PORT
 """
 
 from __future__ import annotations
@@ -29,10 +18,12 @@ from __future__ import annotations
 import asyncio
 import hmac
 import os
-import socket
+from contextlib import asynccontextmanager
 from typing import Any
 
-from websockets.asyncio.server import ServerConnection, serve
+from fastapi import FastAPI, WebSocket
+from fastapi.responses import JSONResponse
+import uvicorn
 
 
 PG_REMOTE_HOST = os.environ.get(
@@ -44,52 +35,90 @@ PG_GATEWAY_TOKEN = os.environ.get("PG_GATEWAY_TOKEN")
 
 BUFFER_SIZE = 64 * 1024
 OPEN_TIMEOUT = 20
-MAX_MESSAGE_SIZE = 8 * 1024 * 1024
-
-if not PG_GATEWAY_TOKEN:
-    raise RuntimeError("PG_GATEWAY_TOKEN est obligatoire.")
 
 
-def _authorized(connection: ServerConnection) -> bool:
-    authorization = connection.request.headers.get("Authorization", "")
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    if not PG_GATEWAY_TOKEN:
+        raise RuntimeError("PG_GATEWAY_TOKEN est obligatoire.")
+    yield
+
+
+app = FastAPI(
+    title="JeryMotro PostgreSQL WebSocket Gateway",
+    version="1.0.0",
+    lifespan=lifespan,
+)
+
+
+@app.get("/")
+async def root() -> JSONResponse:
+    return JSONResponse(
+        {
+            "service": "jerymotro-pg-websocket-gateway",
+            "status": "ok",
+            "websocket": "/wss",
+        }
+    )
+
+
+@app.get("/health")
+async def health() -> JSONResponse:
+    return JSONResponse({"status": "ok"})
+
+
+def _authorized(websocket: WebSocket) -> bool:
+    authorization = websocket.headers.get("authorization", "")
     expected = f"Bearer {PG_GATEWAY_TOKEN}"
     return hmac.compare_digest(authorization, expected)
 
 
 async def pipe_websocket_to_postgres(
-    websocket: ServerConnection,
+    websocket: WebSocket,
     postgres_writer: asyncio.StreamWriter,
 ) -> None:
-    async for message in websocket:
-        if not isinstance(message, bytes):
-            await websocket.close(code=1003, reason="Binary messages only")
+    while True:
+        message = await websocket.receive()
+
+        if message["type"] == "websocket.disconnect":
             return
 
-        postgres_writer.write(message)
+        if message["type"] != "websocket.receive":
+            continue
+
+        data = message.get("bytes")
+        if data is None:
+            await websocket.close(
+                code=1003,
+                reason="Binary messages only",
+            )
+            return
+
+        postgres_writer.write(data)
         await postgres_writer.drain()
 
 
 async def pipe_postgres_to_websocket(
-    websocket: ServerConnection,
+    websocket: WebSocket,
     postgres_reader: asyncio.StreamReader,
 ) -> None:
     while True:
         data = await postgres_reader.read(BUFFER_SIZE)
         if not data:
             return
-        await websocket.send(data)
+        await websocket.send_bytes(data)
 
 
-async def handle(websocket: ServerConnection) -> None:
-    peer = "unknown"
-    if websocket.remote_address:
-        peer = str(websocket.remote_address)
+@app.websocket("/wss")
+async def postgres_websocket(websocket: WebSocket) -> None:
+    peer = str(websocket.client)
 
     if not _authorized(websocket):
         print(f"[AUTH] Refus WebSocket : {peer}")
         await websocket.close(code=1008, reason="Unauthorized")
         return
 
+    await websocket.accept()
     print(f"[+] WebSocket PostgreSQL : {peer}")
 
     reader: asyncio.StreamReader | None = None
@@ -131,21 +160,34 @@ async def handle(websocket: ServerConnection) -> None:
         await asyncio.gather(*pending, return_exceptions=True)
 
         for task in done:
-            error = task.exception()
-            if error and not isinstance(
-                error,
-                (ConnectionError, BrokenPipeError, asyncio.CancelledError),
-            ):
-                print(f"[RELAY] Erreur : {type(error).__name__}: {error}")
+            try:
+                error = task.exception()
+            except asyncio.CancelledError:
+                error = None
+
+            if error:
+                print(
+                    f"[RELAY] Erreur : "
+                    f"{type(error).__name__}: {error}"
+                )
 
     except asyncio.TimeoutError:
         print("[DB] Timeout de connexion PostgreSQL.")
-        await websocket.close(code=1013, reason="PostgreSQL connection timeout")
+        try:
+            await websocket.close(
+                code=1013,
+                reason="PostgreSQL connection timeout",
+            )
+        except Exception:
+            pass
 
     except Exception as exc:  # noqa: BLE001
         print(f"[ERROR] {type(exc).__name__}: {exc}")
         try:
-            await websocket.close(code=1011, reason="Gateway error")
+            await websocket.close(
+                code=1011,
+                reason="Gateway error",
+            )
         except Exception:
             pass
 
@@ -153,6 +195,7 @@ async def handle(websocket: ServerConnection) -> None:
         for task in tasks:
             if not task.done():
                 task.cancel()
+
         await asyncio.gather(*tasks, return_exceptions=True)
 
         if writer is not None:
@@ -165,29 +208,11 @@ async def handle(websocket: ServerConnection) -> None:
         print(f"[-] WebSocket PostgreSQL terminé : {peer}")
 
 
-async def main() -> None:
-    host = os.environ.get("IP", "::")
-    port = int(os.environ.get("PORT", "8765"))
-
-    print("============================================================")
-    print(" JeryMotro - PostgreSQL WebSocket Gateway")
-    print("============================================================")
-    print(f"Listen      : {host}:{port}")
-    print(f"PostgreSQL  : {PG_REMOTE_HOST}:{PG_REMOTE_PORT}")
-    print("Protocol    : WebSocket binary <-> PostgreSQL TCP")
-    print("============================================================")
-
-    async with serve(
-        handle,
-        host,
-        port,
-        max_size=MAX_MESSAGE_SIZE,
-        ping_interval=20,
-        ping_timeout=20,
-    ):
-        print("[OK] WebSocket gateway démarré.")
-        await asyncio.Future()
-
-
 if __name__ == "__main__":
-    asyncio.run(main())
+    uvicorn.run(
+        "pg_websocket_gateway:app",
+        host="0.0.0.0",
+        port=int(os.environ.get("PORT", "10000")),
+        proxy_headers=True,
+        forwarded_allow_ips="*",
+    )
