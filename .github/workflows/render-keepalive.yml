@@ -1,0 +1,36 @@
+name: Keep Render Web Service Awake
+
+on:
+  schedule:
+    # Render Free s'endort après 15 min sans trafic entrant.
+    # Ping toutes les 10 min pour maintenir le Web Service actif.
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+jobs:
+  keepalive:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Render health endpoint
+        env:
+          RENDER_SERVICE_URL: ${{ secrets.RENDER_SERVICE_URL }}
+        run: |
+          set -eu
+
+          if [ -z "${RENDER_SERVICE_URL:-}" ]; then
+            echo "::error::Le secret RENDER_SERVICE_URL n'est pas configuré."
+            exit 1
+          fi
+
+          URL="${RENDER_SERVICE_URL%/}/health"
+          echo "Ping: $URL"
+
+          curl --fail --silent --show-error \
+            --max-time 30 \
+            --retry 3 \
+            --retry-delay 5 \
+            "$URL" > /tmp/health.json
+
+          cat /tmp/health.json
+          echo
+          echo "Render répond correctement."
