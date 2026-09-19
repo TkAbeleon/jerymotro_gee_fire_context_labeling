@@ -114,7 +114,7 @@ Copiez `.env.example` vers `.env` et renseignez les valeurs :
 | Variable | Obligatoire | Description |
 |---|:---:|---|
 | `DATABASE_URL` | ✅ | URL SQLAlchemy PostgreSQL, ex. `postgresql://user:pass@host:5432/db` |
-| `GEE_SERVICE_ACCOUNT_JSON_PATH` | ❌ | Chemin du JSON de Service Account. Si vide → authentification locale standard |
+| `GEE_AUTH_MODE` | ❌ | Mode GEE : `service_account` par défaut. Mettre explicitement `browser` dans `.env` pour utiliser l'authentification par navigateur. |
 | `ENABLE_AUTO_LABELING` | ❌ | `true` active le mode démon planifié. `false` → exécution unique puis arrêt poli. Défaut : `false` |
 | `LABELING_CRON_EXPRESSION` | ❌ | Expression CRON 5 champs, ex. `0 */6 * * *`. Prioritaire sur `INTERVAL_MINUTES` |
 | `INTERVAL_MINUTES` | ❌ | Intervalle en minutes si pas de CRON. Défaut : `360` |
@@ -129,13 +129,22 @@ Copiez `.env.example` vers `.env` et renseignez les valeurs :
 
 ## Authentification Google Earth Engine
 
-### En local (développement)
+### Par défaut : Service Account
 
-```bash
-earthengine authenticate
+Le mode d'authentification par défaut est désormais **Service Account**. Définissez
+`GEE_AUTH_MODE=service_account` et renseignez `GEE_SERVICE_ACCOUNT_JSON_PATH`
+dans `.env`.
+
+### Authentification par navigateur (opt-in)
+
+L'authentification interactive par navigateur est **désactivée par défaut**.
+Pour l'utiliser volontairement en local, définissez explicitement dans `.env` :
+
+```env
+GEE_AUTH_MODE=browser
 ```
 
-Laissez `GEE_SERVICE_ACCOUNT_JSON_PATH` vide dans le `.env`.
+Puis le script lancera `ee.Authenticate()`.
 
 ### En CI/CD ou serveur (Service Account)
 
