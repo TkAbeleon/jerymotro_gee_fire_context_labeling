@@ -14,7 +14,7 @@ Architecture :
 
     PC
       |
-      | 127.0.0.1:5432
+      | 127.0.0.1:15432
       v
     Ce portail TCP
       |
@@ -41,7 +41,7 @@ Usage
 
 Puis, dans un autre terminal local :
 
-    psql "postgresql://postgres:MOT_DE_PASSE@127.0.0.1:5432/jerymotro?sslmode=require"
+    psql "postgresql://postgres:MOT_DE_PASSE@127.0.0.1:15432/jerymotro?sslmode=require"
 
 Important
 ---------
@@ -51,6 +51,7 @@ Il transporte simplement les octets TCP entre PostgreSQL local et distant.
 
 from __future__ import annotations
 
+import base64
 import signal
 import socket
 import subprocess
@@ -67,9 +68,9 @@ SSH_ALIAS = "tk"
 
 LOCAL_HOST = "127.0.0.1"
 
-# 0 = demander automatiquement un port TCP libre au système.
-# Cela évite les conflits lorsque le port 5432 local est déjà utilisé.
-LOCAL_PORT = 0
+# Port local FIXE du portail.
+# 5432 est volontairement évité : il est souvent occupé par PostgreSQL local.
+LOCAL_PORT = 15432
 
 REMOTE_HOST = "jerymotro-numb-ghost-pooler.sage.cloud.layerbase.dev"
 REMOTE_PORT = 5432
@@ -201,34 +202,78 @@ def test_ssh_alias() -> bool:
 
 def build_remote_command() -> str:
     """
-    Construit la commande distante sans dépendre d'un fichier installé
-    sur AlwaysData.
+    Construit le programme Python exécuté temporairement sur AlwaysData.
 
-    Le programme Python distant lit stdin et écrit stdout, ce qui permet
-    de transporter le protocole PostgreSQL sans l'exposer publiquement.
+    Le code est encodé en Base64 avant d'être envoyé à SSH afin d'éviter
+    les problèmes de quoting avec les fonctions Python et les caractères
+    spéciaux du programme distant.
+
+    Le processus distant :
+      - ouvre TCP vers le PostgreSQL Layerbase ;
+      - lit stdin (flux PostgreSQL venant du PC) ;
+      - écrit stdout (réponses PostgreSQL vers le PC).
     """
+    remote_program = f"""
+import socket
+import sys
+import threading
+
+HOST = {REMOTE_HOST!r}
+PORT = {REMOTE_PORT!r}
+
+sock = socket.create_connection((HOST, PORT), timeout={SOCKET_TIMEOUT!r})
+sock.settimeout(None)
+
+def client_to_database():
+    try:
+        while True:
+            data = sys.stdin.buffer.read({BUFFER_SIZE})
+            if not data:
+                break
+            sock.sendall(data)
+    except Exception:
+        pass
+    finally:
+        try:
+            sock.shutdown(socket.SHUT_WR)
+        except Exception:
+            pass
+
+def database_to_client():
+    try:
+        while True:
+            data = sock.recv({BUFFER_SIZE})
+            if not data:
+                break
+            sys.stdout.buffer.write(data)
+            sys.stdout.buffer.flush()
+    except Exception:
+        pass
+
+thread_up = threading.Thread(target=client_to_database, daemon=True)
+thread_down = threading.Thread(target=database_to_client, daemon=True)
+
+thread_up.start()
+thread_down.start()
+
+thread_up.join()
+thread_down.join()
+
+try:
+    sock.close()
+except Exception:
+    pass
+""".strip()
+
+    encoded = base64.b64encode(
+        remote_program.encode("utf-8")
+    ).decode("ascii")
+
     return (
-        "exec python3 -u -c "
-        "'import socket,sys,threading;"
-        f"s=socket.create_connection(({REMOTE_HOST!r},{REMOTE_PORT}),{SOCKET_TIMEOUT});"
-        "s.settimeout(None);"
-        "def a():"
-        "\n    "
-        "while True:"
-        "\n        d=sys.stdin.buffer.read(65536);"
-        "\n        if not d: break;"
-        "\n        s.sendall(d);"
-        "\ndef b():"
-        "\n    "
-        "while True:"
-        "\n        d=s.recv(65536);"
-        "\n        if not d: break;"
-        "\n        sys.stdout.buffer.write(d);"
-        "\n        sys.stdout.buffer.flush();"
-        "\nt1=threading.Thread(target=a,daemon=True);"
-        "t2=threading.Thread(target=b,daemon=True);"
-        "t1.start();t2.start();t1.join();t2.join();"
-        "s.close()'"
+        "python3 -u -c "
+        + '"import base64;exec(base64.b64decode(\''
+        + encoded
+        + "\'))""
     )
 
 
@@ -388,10 +433,7 @@ def run_server() -> None:
     try:
         server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         server.bind((LOCAL_HOST, LOCAL_PORT))
-
-        # Récupère le port réellement attribué par le système lorsque
-        # LOCAL_PORT=0.
-        local_port = int(server.getsockname()[1])
+        local_port = LOCAL_PORT
 
         server.listen(20)
         server.settimeout(1.0)
@@ -402,8 +444,8 @@ def run_server() -> None:
             f"{type(exc).__name__}: {exc}"
         )
         print(
-            "[INFO] Le système doit normalement choisir automatiquement un port "
-            "libre (LOCAL_PORT=0)."
+            f"[INFO] Le port local est fixe : {LOCAL_PORT}. "
+            "Choisissez un autre port dans le code s'il est déjà occupé."
         )
         raise SystemExit(1) from exc
 
