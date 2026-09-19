@@ -1,0 +1,153 @@
+tsikynyantsa@ssh1 ~/jerymotro_gee_fire_context_labeling
+ % python gee_fire_context_labeling.py --once 
+2026-09-19 13:07:33 | INFO     | jerymotro.gee_labeling | Connexion à la base de données...
+2026-09-19 13:07:36 | INFO     | jerymotro.gee_labeling | Les colonnes de contexte existent déjà. Aucune migration nécessaire.
+2026-09-19 13:07:36 | INFO     | jerymotro.gee_labeling | Authentification GEE via Service Account : /home/tsikynyantsa/jerymotro_gee_fire_context_labeling/service-account.json
+2026-09-19 13:07:36 | WARNING  | googleapiclient.http | Invalid JSON content from response: b'<!DOCTYPE html>\n<html lang=en>\n  <meta charset=utf-8>\n  <meta name=viewport content="initial-scale=1, minimum-scale=1, width=device-width">\n  <title>Error 403 (Forbidden)!!1</title>\n  <style>\n    *{margin:0;padding:0}html,code{font:15px/22px arial,sans-serif}html{background:#fff;color:#222;padding:15px}body{margin:7% auto 0;max-width:390px;min-height:180px;padding:30px 0 15px}* > body{background:url(//www.google.com/images/errors/robot.png) 100% 5px no-repeat;padding-right:205px}p{margin:11px 0 22px;overflow:hidden}ins{color:#777;text-decoration:none}a img{border:0}@media screen and (max-width:772px){body{background:none;margin-top:0;max-width:none;padding-right:0}}#logo{background:url(//www.google.com/images/branding/googlelogo/1x/googlelogo_color_150x54dp.png) no-repeat;margin-left:-5px}@media only screen and (min-resolution:192dpi){#logo{background:url(//www.google.com/images/branding/googlelogo/2x/googlelogo_color_150x54dp.png) no-repeat 0% 0%/100% 100%;-moz-border-image:url(//www.google.com/images/branding/googlelogo/2x/googlelogo_color_150x54dp.png) 0}}@media only screen and (-webkit-min-device-pixel-ratio:2){#logo{background:url(//www.google.com/images/branding/googlelogo/2x/googlelogo_color_150x54dp.png) no-repeat;-webkit-background-size:100% 100%}}#logo{display:inline-block;height:54px;width:150px}\n  </style>\n  <a href=//www.google.com/><span id=logo aria-label=Google></span></a>\n  <p><b>403.</b> <ins>That\xe2\x80\x99s an error.</ins>\n  <p>Your client does not have permission to get URL <code>/$discovery/rest</code> from this server.  <ins>That\xe2\x80\x99s all we know.</ins>\n'
+2026-09-19 13:07:36 | ERROR    | jerymotro.gee_labeling | Échec de l'initialisation de Google Earth Engine.
+Traceback (most recent call last):
+  File "/home/tsikynyantsa/jerymotro_gee_fire_context_labeling/gee_fire_context_labeling.py", line 278, in initialize_gee
+    ee.Initialize(credentials)
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^
+  File "/home/tsikynyantsa/jerymotro_gee_fire_context_labeling/venv/lib/python3.13/site-packages/ee/_utils.py", line 39, in wrapper
+    return func(*args, **kwargs)
+  File "/home/tsikynyantsa/jerymotro_gee_fire_context_labeling/venv/lib/python3.13/site-packages/ee/__init__.py", line 242, in Initialize
+    data.initialize(
+    ~~~~~~~~~~~~~~~^
+        credentials=credentials,
+        ^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<5 lines>...
+        http_transport=http_transport,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/tsikynyantsa/jerymotro_gee_fire_context_labeling/venv/lib/python3.13/site-packages/ee/data.py", line 189, in initialize
+    _install_cloud_api_resource()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/home/tsikynyantsa/jerymotro_gee_fire_context_labeling/venv/lib/python3.13/site-packages/ee/data.py", line 263, in _install_cloud_api_resource
+    state.cloud_api_resource = _cloud_api_utils.build_cloud_resource(
+                               ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        state.cloud_api_base_url,  # pyrefly: ignore[bad-argument-type]
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+        http_transport=state.http_transport,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/tsikynyantsa/jerymotro_gee_fire_context_labeling/venv/lib/python3.13/site-packages/ee/_cloud_api_utils.py", line 217, in build_cloud_resource
+    resource = build(static_discovery=False)
+  File "/home/tsikynyantsa/jerymotro_gee_fire_context_labeling/venv/lib/python3.13/site-packages/ee/_cloud_api_utils.py", line 200, in build
+    return discovery.build(
+           ~~~~~~~~~~~~~~~^
+        'earthengine',
+        ^^^^^^^^^^^^^^
+    ...<7 lines>...
+        num_retries=num_retries,
+        ^^^^^^^^^^^^^^^^^^^^^^^^
+        **kwargs)  # pytype: disable=wrong-keyword-args
+        ^^^^^^^^^
+  File "/home/tsikynyantsa/jerymotro_gee_fire_context_labeling/venv/lib/python3.13/site-packages/googleapiclient/_helpers.py", line 130, in positional_wrapper
+    return wrapped(*args, **kwargs)
+  File "/home/tsikynyantsa/jerymotro_gee_fire_context_labeling/venv/lib/python3.13/site-packages/googleapiclient/discovery.py", line 334, in build
+    raise e
+  File "/home/tsikynyantsa/jerymotro_gee_fire_context_labeling/venv/lib/python3.13/site-packages/googleapiclient/discovery.py", line 305, in build
+    content = _retrieve_discovery_doc(
+        requested_url,
+    ...<7 lines>...
+        static_discovery=static_discovery,
+    )
+  File "/home/tsikynyantsa/jerymotro_gee_fire_context_labeling/venv/lib/python3.13/site-packages/googleapiclient/discovery.py", line 440, in _retrieve_discovery_doc
+    resp, content = req.execute(num_retries=num_retries)
+                    ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/tsikynyantsa/jerymotro_gee_fire_context_labeling/venv/lib/python3.13/site-packages/googleapiclient/_helpers.py", line 130, in positional_wrapper
+    return wrapped(*args, **kwargs)
+  File "/home/tsikynyantsa/jerymotro_gee_fire_context_labeling/venv/lib/python3.13/site-packages/googleapiclient/http.py", line 1018, in execute
+    raise HttpError(resp, content, uri=self.uri)
+googleapiclient.errors.HttpError: <HttpError 403 when requesting https://earthengine.googleapis.com/$discovery/rest?version=v1&prettyPrint=false returned "Ok". Details: "<!DOCTYPE html>
+<html lang=en>
+  <meta charset=utf-8>
+  <meta name=viewport content="initial-scale=1, minimum-scale=1, width=device-width">
+  <title>Error 403 (Forbidden)!!1</title>
+  <style>
+    *{margin:0;padding:0}html,code{font:15px/22px arial,sans-serif}html{background:#fff;color:#222;padding:15px}body{margin:7% auto 0;max-width:390px;min-height:180px;padding:30px 0 15px}* > body{background:url(//www.google.com/images/errors/robot.png) 100% 5px no-repeat;padding-right:205px}p{margin:11px 0 22px;overflow:hidden}ins{color:#777;text-decoration:none}a img{border:0}@media screen and (max-width:772px){body{background:none;margin-top:0;max-width:none;padding-right:0}}#logo{background:url(//www.google.com/images/branding/googlelogo/1x/googlelogo_color_150x54dp.png) no-repeat;margin-left:-5px}@media only screen and (min-resolution:192dpi){#logo{background:url(//www.google.com/images/branding/googlelogo/2x/googlelogo_color_150x54dp.png) no-repeat 0% 0%/100% 100%;-moz-border-image:url(//www.google.com/images/branding/googlelogo/2x/googlelogo_color_150x54dp.png) 0}}@media only screen and (-webkit-min-device-pixel-ratio:2){#logo{background:url(//www.google.com/images/branding/googlelogo/2x/googlelogo_color_150x54dp.png) no-repeat;-webkit-background-size:100% 100%}}#logo{display:inline-block;height:54px;width:150px}
+  </style>
+  <a href=//www.google.com/><span id=logo aria-label=Google></span></a>
+  <p><b>403.</b> <ins>That’s an error.</ins>
+  <p>Your client does not have permission to get URL <code>/$discovery/rest</code> from this server.  <ins>That’s all we know.</ins>
+">
+Traceback (most recent call last):
+  File "/home/tsikynyantsa/jerymotro_gee_fire_context_labeling/gee_fire_context_labeling.py", line 637, in <module>
+    main()
+    ~~~~^^
+  File "/home/tsikynyantsa/jerymotro_gee_fire_context_labeling/gee_fire_context_labeling.py", line 621, in main
+    initialize_gee(config)
+    ~~~~~~~~~~~~~~^^^^^^^^
+  File "/home/tsikynyantsa/jerymotro_gee_fire_context_labeling/gee_fire_context_labeling.py", line 278, in initialize_gee
+    ee.Initialize(credentials)
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^
+  File "/home/tsikynyantsa/jerymotro_gee_fire_context_labeling/venv/lib/python3.13/site-packages/ee/_utils.py", line 39, in wrapper
+    return func(*args, **kwargs)
+  File "/home/tsikynyantsa/jerymotro_gee_fire_context_labeling/venv/lib/python3.13/site-packages/ee/__init__.py", line 242, in Initialize
+    data.initialize(
+    ~~~~~~~~~~~~~~~^
+        credentials=credentials,
+        ^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<5 lines>...
+        http_transport=http_transport,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/tsikynyantsa/jerymotro_gee_fire_context_labeling/venv/lib/python3.13/site-packages/ee/data.py", line 189, in initialize
+    _install_cloud_api_resource()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/home/tsikynyantsa/jerymotro_gee_fire_context_labeling/venv/lib/python3.13/site-packages/ee/data.py", line 263, in _install_cloud_api_resource
+    state.cloud_api_resource = _cloud_api_utils.build_cloud_resource(
+                               ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        state.cloud_api_base_url,  # pyrefly: ignore[bad-argument-type]
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+        http_transport=state.http_transport,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/tsikynyantsa/jerymotro_gee_fire_context_labeling/venv/lib/python3.13/site-packages/ee/_cloud_api_utils.py", line 217, in build_cloud_resource
+    resource = build(static_discovery=False)
+  File "/home/tsikynyantsa/jerymotro_gee_fire_context_labeling/venv/lib/python3.13/site-packages/ee/_cloud_api_utils.py", line 200, in build
+    return discovery.build(
+           ~~~~~~~~~~~~~~~^
+        'earthengine',
+        ^^^^^^^^^^^^^^
+    ...<7 lines>...
+        num_retries=num_retries,
+        ^^^^^^^^^^^^^^^^^^^^^^^^
+        **kwargs)  # pytype: disable=wrong-keyword-args
+        ^^^^^^^^^
+  File "/home/tsikynyantsa/jerymotro_gee_fire_context_labeling/venv/lib/python3.13/site-packages/googleapiclient/_helpers.py", line 130, in positional_wrapper
+    return wrapped(*args, **kwargs)
+  File "/home/tsikynyantsa/jerymotro_gee_fire_context_labeling/venv/lib/python3.13/site-packages/googleapiclient/discovery.py", line 334, in build
+    raise e
+  File "/home/tsikynyantsa/jerymotro_gee_fire_context_labeling/venv/lib/python3.13/site-packages/googleapiclient/discovery.py", line 305, in build
+    content = _retrieve_discovery_doc(
+        requested_url,
+    ...<7 lines>...
+        static_discovery=static_discovery,
+    )
+  File "/home/tsikynyantsa/jerymotro_gee_fire_context_labeling/venv/lib/python3.13/site-packages/googleapiclient/discovery.py", line 440, in _retrieve_discovery_doc
+    resp, content = req.execute(num_retries=num_retries)
+                    ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/tsikynyantsa/jerymotro_gee_fire_context_labeling/venv/lib/python3.13/site-packages/googleapiclient/_helpers.py", line 130, in positional_wrapper
+    return wrapped(*args, **kwargs)
+  File "/home/tsikynyantsa/jerymotro_gee_fire_context_labeling/venv/lib/python3.13/site-packages/googleapiclient/http.py", line 1018, in execute
+    raise HttpError(resp, content, uri=self.uri)
+googleapiclient.errors.HttpError: <HttpError 403 when requesting https://earthengine.googleapis.com/$discovery/rest?version=v1&prettyPrint=false returned "Ok". Details: "<!DOCTYPE html>
+<html lang=en>
+  <meta charset=utf-8>
+  <meta name=viewport content="initial-scale=1, minimum-scale=1, width=device-width">
+  <title>Error 403 (Forbidden)!!1</title>
+  <style>
+    *{margin:0;padding:0}html,code{font:15px/22px arial,sans-serif}html{background:#fff;color:#222;padding:15px}body{margin:7% auto 0;max-width:390px;min-height:180px;padding:30px 0 15px}* > body{background:url(//www.google.com/images/errors/robot.png) 100% 5px no-repeat;padding-right:205px}p{margin:11px 0 22px;overflow:hidden}ins{color:#777;text-decoration:none}a img{border:0}@media screen and (max-width:772px){body{background:none;margin-top:0;max-width:none;padding-right:0}}#logo{background:url(//www.google.com/images/branding/googlelogo/1x/googlelogo_color_150x54dp.png) no-repeat;margin-left:-5px}@media only screen and (min-resolution:192dpi){#logo{background:url(//www.google.com/images/branding/googlelogo/2x/googlelogo_color_150x54dp.png) no-repeat 0% 0%/100% 100%;-moz-border-image:url(//www.google.com/images/branding/googlelogo/2x/googlelogo_color_150x54dp.png) 0}}@media only screen and (-webkit-min-device-pixel-ratio:2){#logo{background:url(//www.google.com/images/branding/googlelogo/2x/googlelogo_color_150x54dp.png) no-repeat;-webkit-background-size:100% 100%}}#logo{display:inline-block;height:54px;width:150px}
+  </style>
+  <a href=//www.google.com/><span id=logo aria-label=Google></span></a>
+  <p><b>403.</b> <ins>That’s an error.</ins>
+  <p>Your client does not have permission to get URL <code>/$discovery/rest</code> from this server.  <ins>That’s all we know.</ins>
+">
