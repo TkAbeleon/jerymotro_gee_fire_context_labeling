@@ -1,21 +1,14 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Temporary local PostgreSQL client for the AlwaysData WebSocket gateway.
+Local TCP -> Render WSS -> PostgreSQL bridge.
 
-It exposes:
+Environment:
+    PG_WS_URL=wss://<service>.onrender.com/wss
+    PG_GATEWAY_TOKEN=<Render secret>
+
+Local listener:
     127.0.0.1:15432
-
-and forwards every TCP byte to:
-    wss://<AlwaysData-site>/wss
-
-Usage:
-    PG_WS_URL=wss://ACCOUNT.alwaysdata.net/wss \
-    PG_GATEWAY_TOKEN='...' \
-    python3 pg_websocket_client.py
-
-Then:
-    psql "postgresql://postgres:PASSWORD@127.0.0.1:15432/jerymotro?sslmode=require"
 """
 
 from __future__ import annotations
@@ -29,13 +22,10 @@ from websockets.asyncio.client import connect
 
 LOCAL_HOST = "127.0.0.1"
 LOCAL_PORT = int(os.environ.get("PG_LOCAL_PORT", "15432"))
-
 PG_WS_URL = os.environ.get("PG_WS_URL")
 PG_GATEWAY_TOKEN = os.environ.get("PG_GATEWAY_TOKEN")
-
 BUFFER_SIZE = 64 * 1024
 MAX_MESSAGE_SIZE = 8 * 1024 * 1024
-
 stop_event = asyncio.Event()
 
 
@@ -43,10 +33,7 @@ def stop() -> None:
     stop_event.set()
 
 
-async def pipe_local_to_websocket(
-    reader: asyncio.StreamReader,
-    websocket,
-) -> None:
+async def pipe_local_to_websocket(reader, websocket) -> None:
     while True:
         data = await reader.read(BUFFER_SIZE)
         if not data:
@@ -54,41 +41,24 @@ async def pipe_local_to_websocket(
         await websocket.send(data)
 
 
-async def pipe_websocket_to_local(
-    websocket,
-    writer: asyncio.StreamWriter,
-) -> None:
+async def pipe_websocket_to_local(websocket, writer) -> None:
     async for message in websocket:
         if not isinstance(message, bytes):
-            raise RuntimeError("Le gateway a renvoyé un message WebSocket texte.")
-
+            raise RuntimeError("Le gateway a renvoyé un message texte.")
         writer.write(message)
         await writer.drain()
 
 
-async def handle_client(
-    reader: asyncio.StreamReader,
-    writer: asyncio.StreamWriter,
-) -> None:
+async def handle_client(reader, writer) -> None:
     peer = writer.get_extra_info("peername")
+    tasks = set()
     print(f"[+] Connexion locale PostgreSQL : {peer}")
 
-    if not PG_WS_URL:
-        print("[ERROR] PG_WS_URL n'est pas défini.")
-        writer.close()
-        await writer.wait_closed()
-        return
-
-    if not PG_GATEWAY_TOKEN:
-        print("[ERROR] PG_GATEWAY_TOKEN n'est pas défini.")
-        writer.close()
-        await writer.wait_closed()
-        return
-
-    tasks = set()
-
     try:
-        print(f"[WS] Connexion vers {PG_WS_URL} ...")
+        if not PG_WS_URL:
+            raise RuntimeError("PG_WS_URL n'est pas défini.")
+        if not PG_GATEWAY_TOKEN:
+            raise RuntimeError("PG_GATEWAY_TOKEN n'est pas défini.")
 
         async with connect(
             PG_WS_URL,
@@ -99,7 +69,7 @@ async def handle_client(
             ping_interval=20,
             ping_timeout=20,
         ) as websocket:
-            print("[WS] WebSocket connecté.")
+            print(f"[WS] Connecté : {PG_WS_URL}")
 
             local_to_ws = asyncio.create_task(
                 pipe_local_to_websocket(reader, websocket)
@@ -107,7 +77,6 @@ async def handle_client(
             ws_to_local = asyncio.create_task(
                 pipe_websocket_to_local(websocket, writer)
             )
-
             tasks = {local_to_ws, ws_to_local}
 
             done, pending = await asyncio.wait(
@@ -121,20 +90,20 @@ async def handle_client(
             await asyncio.gather(*pending, return_exceptions=True)
 
             for task in done:
-                error = task.exception()
+                try:
+                    error = task.exception()
+                except asyncio.CancelledError:
+                    error = None
                 if error:
-                    print(
-                        f"[RELAY] {type(error).__name__}: {error}"
-                    )
+                    print(f"[RELAY] {type(error).__name__}: {error}")
 
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         print(f"[ERROR] {type(exc).__name__}: {exc}")
 
     finally:
         for task in tasks:
             if not task.done():
                 task.cancel()
-
         await asyncio.gather(*tasks, return_exceptions=True)
 
         writer.close()
@@ -143,20 +112,17 @@ async def handle_client(
         except Exception:
             pass
 
-    print(f"[-] Connexion locale terminée : {peer}")
+        print(f"[-] Connexion locale terminée : {peer}")
 
 
 async def main() -> None:
     if not PG_WS_URL:
         raise SystemExit(
             "PG_WS_URL obligatoire, ex. "
-            "wss://moncompte.alwaysdata.net/wss"
+            "wss://mon-service.onrender.com/wss"
         )
-
     if not PG_GATEWAY_TOKEN:
-        raise SystemExit(
-            "PG_GATEWAY_TOKEN obligatoire."
-        )
+        raise SystemExit("PG_GATEWAY_TOKEN obligatoire.")
 
     server = await asyncio.start_server(
         handle_client,
@@ -164,25 +130,12 @@ async def main() -> None:
         LOCAL_PORT,
     )
 
-    addresses = ", ".join(str(sock.getsockname()) for sock in server.sockets or [])
-
-    print("============================================================")
-    print(" JeryMotro - PostgreSQL WebSocket local client")
-    print("============================================================")
-    print(f"Local       : {addresses}")
-    print(f"Gateway     : {PG_WS_URL}")
-    print("Protocol    : TCP PostgreSQL <-> WSS binary")
-    print("============================================================")
-    print(
-        f"[OK] Port PostgreSQL local disponible sur "
-        f"{LOCAL_HOST}:{LOCAL_PORT}"
-    )
-    print(
-        "[INFO] Exemple : "
-        f"psql "postgresql://postgres:PASSWORD@{LOCAL_HOST}:"
-        f"{LOCAL_PORT}/jerymotro?sslmode=require""
-    )
-    print("[INFO] Ctrl+C pour arrêter.")
+    print("=" * 60)
+    print("JeryMotro - PostgreSQL WebSocket local client")
+    print("=" * 60)
+    print(f"Local   : {LOCAL_HOST}:{LOCAL_PORT}")
+    print(f"Gateway : {PG_WS_URL}")
+    print("[OK] En attente de connexions PostgreSQL.")
 
     async with server:
         await stop_event.wait()
