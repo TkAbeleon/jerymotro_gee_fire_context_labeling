@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: jerymotro-pg-websocket-gateway
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements-render.txt
+    startCommand: uvicorn pg_websocket_gateway:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: PG_GATEWAY_TOKEN
+        generateValue: true
+      - key: PG_REMOTE_HOST
+        value: jerymotro-numb-ghost-pooler.sage.cloud.layerbase.dev
+      - key: PG_REMOTE_PORT
+        value: "5432"
