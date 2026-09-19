@@ -16,4 +16,6 @@ COPY web_server.py /app/web_server.py
 
 EXPOSE 10000
 
-CMD ["uvicorn", "web_server:app", "--host", "0.0.0.0", "--port", "10000"]
+# Render doit toujours lancer le serveur HTTP.
+# Le worker GEE est démarré en arrière-plan par web_server.py.
+ENTRYPOINT ["uvicorn", "web_server:app", "--host", "0.0.0.0", "--port", "10000"]
