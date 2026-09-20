@@ -123,6 +123,7 @@ Copiez `.env.example` vers `.env` et renseignez les valeurs :
 | `MAX_RECORDS_PER_RUN` | ❌ | Plafond de sécurité par exécution. Vide = illimité |
 | `REGION_FILTER` | ❌ | Ne traite que les détections d'une `region` donnée. Vide = toutes |
 | `SYNC_LANDCOVER_COLUMN` | ❌ | Si `true`, renseigne aussi la colonne métier `landcover` quand elle est `NULL`. Défaut : `false` |
+| `WORK` | ❌ | Répartition entre 2 workers : `0` = désactivé, `1` = IDs impairs, `2` = IDs pairs. Défaut : `0` |
 | `LOG_LEVEL` | ❌ | `DEBUG`, `INFO`, `WARNING`, `ERROR`. Défaut : `INFO` |
 
 ---
@@ -346,6 +347,26 @@ reprise est automatique grâce au filtre `fire_context_type IS NULL`.
 **Dégradation gracieuse.** Si un lot échoue définitivement après épuisement du
 backoff, l'erreur est journalisée et le script poursuit avec le lot suivant
 plutôt que de tout interrompre.
+
+### Traitement parallèle sur deux Web Services
+
+Pour utiliser deux Web Services différents sur la même base PostgreSQL sans qu'ils sélectionnent les mêmes lignes :
+
+**Web Service 1**
+
+```env
+WORK=1
+```
+
+**Web Service 2**
+
+```env
+WORK=2
+```
+
+Le partitionnement est déterministe sur la clé primaire `id` : le worker 1 traite les IDs impairs et le worker 2 les IDs pairs. Les deux services peuvent donc fonctionner en parallèle sur la même base. Après un redémarrage, chaque worker reprend uniquement sa partition et les lignes déjà labellisées restent exclues par `fire_context_type IS NULL`.
+
+Avec `WORK=0`, le partitionnement est désactivé (mode historique).
 
 ### Réglage pour le Free Tier
 
