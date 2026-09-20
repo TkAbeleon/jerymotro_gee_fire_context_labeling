@@ -39,6 +39,7 @@ import json
 import logging
 import os
 import sys
+import time
 from dataclasses import dataclass
 from typing import Dict, List, Optional
 
@@ -46,7 +47,7 @@ from dotenv import load_dotenv
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import DBAPIError, OperationalError, SQLAlchemyError
 
 from tenacity import (
     retry,
@@ -440,6 +441,46 @@ def label_batch_via_gee(rows: List[dict]) -> Dict[int, dict]:
 # ---------------------------------------------------------------------------
 # Base de données : lecture / écriture par lots
 # ---------------------------------------------------------------------------
+DB_RETRY_ATTEMPTS = 6
+DB_RETRY_BASE_SECONDS = 2
+DB_POOL_RECYCLE_SECONDS = 300
+
+
+def _is_transient_db_disconnect(exception: BaseException) -> bool:
+    """Détermine si une erreur DB correspond probablement à une coupure/reconnexion."""
+    if isinstance(exception, OperationalError):
+        message = str(exception).lower()
+        markers = (
+            "ssl syscall error",
+            "eof detected",
+            "connection reset",
+            "connection refused",
+            "server closed the connection",
+            "connection not open",
+            "connection already closed",
+            "could not receive data",
+            "could not send data",
+        )
+        return any(marker in message for marker in markers) or bool(
+            getattr(exception, "connection_invalidated", False)
+        )
+    if isinstance(exception, DBAPIError):
+        return bool(getattr(exception, "connection_invalidated", False))
+    return False
+
+
+def _db_retry_sleep(attempt: int) -> None:
+    """Backoff court pour laisser le réseau/serveur PostgreSQL se reconnecter."""
+    delay = min(DB_RETRY_BASE_SECONDS * (2 ** (attempt - 1)), 30)
+    logger.warning(
+        "Nouvelle tentative DB dans %d seconde(s) (tentative %d/%d).",
+        delay,
+        attempt + 1,
+        DB_RETRY_ATTEMPTS,
+    )
+    time.sleep(delay)
+
+
 def fetch_pending_detections(
     session: Session,
     limit: int,
@@ -544,67 +585,129 @@ def apply_updates(
 # ---------------------------------------------------------------------------
 def run_labeling_job(engine: Engine, config: AppConfig) -> None:
     """
-    Boucle principale : tant qu'il reste des détections non labellisées,
-    traite des lots de `db_batch_size` enregistrements, en sous-découpant
-    éventuellement les appels GEE par `gee_batch_size`.
+    Boucle principale résiliente :
+      - une session PostgreSQL courte pour chaque lecture ;
+      - une session PostgreSQL courte pour chaque écriture ;
+      - aucune connexion DB n'est conservée pendant les appels GEE ;
+      - reconnexion automatique en cas de coupure réseau/SSL.
     """
     logger.info("=== Démarrage du job de labellisation contextuelle GEE ===")
     session_factory = sessionmaker(bind=engine, future=True)
     total_processed = 0
     total_labeled = 0
 
-    with session_factory() as session:
-        while True:
-            if config.max_records_per_run and total_processed >= config.max_records_per_run:
-                logger.info(
-                    "Limite MAX_RECORDS_PER_RUN=%d atteinte pour cette exécution.",
-                    config.max_records_per_run,
-                )
-                break
-
-            rows = fetch_pending_detections(
-                session,
-                limit=config.db_batch_size,
-                region_filter=config.region_filter,
-                worker_id=config.worker_id,
-            )
-            if not rows:
-                logger.info("Aucune détection en attente de labellisation. Job terminé.")
-                break
-
-            logger.info("Lot récupéré : %d détection(s) à traiter.", len(rows))
-            labeled_in_this_round = 0
-
-            # Sous-découpage éventuel pour les appels GEE (protection Free Tier)
-            for i in range(0, len(rows), config.gee_batch_size):
-                sub_batch = rows[i : i + config.gee_batch_size]
-                updates = label_batch_via_gee(sub_batch)
-                apply_updates(
-                    session, updates, sync_landcover=config.sync_landcover_column
-                )
-                labeled_in_this_round += len(updates)
-
-            total_labeled += labeled_in_this_round
-            total_processed += len(rows)
-
-            # Garde-fou anti-boucle-infinie : si aucun enregistrement n'a pu être
-            # labellisé, la même page sera resélectionnée indéfiniment
-            # (fire_context_type reste NULL). On arrête pour laisser la main à
-            # la prochaine exécution planifiée.
-            if labeled_in_this_round == 0:
-                logger.warning(
-                    "Aucun enregistrement labellisé sur ce lot de %d détection(s). "
-                    "Arrêt du job pour éviter une boucle infinie — vérifiez les logs "
-                    "GEE ci-dessus. Le traitement reprendra à la prochaine exécution.",
-                    len(rows),
-                )
-                break
-
+    while True:
+        if config.max_records_per_run and total_processed >= config.max_records_per_run:
             logger.info(
-                "Progression cumulée : %d détection(s) traitées, %d labellisées avec succès.",
-                total_processed,
-                total_labeled,
+                "Limite MAX_RECORDS_PER_RUN=%d atteinte pour cette exécution.",
+                config.max_records_per_run,
             )
+            break
+
+        # ------------------------------------------------------------------
+        # Lecture DB avec connexion courte et retry de reconnexion.
+        # La connexion est libérée avant l'appel GEE.
+        # ------------------------------------------------------------------
+        rows = None
+        last_db_error = None
+
+        for attempt in range(1, DB_RETRY_ATTEMPTS + 1):
+            try:
+                with session_factory() as session:
+                    rows = fetch_pending_detections(
+                        session,
+                        limit=config.db_batch_size,
+                        region_filter=config.region_filter,
+                        worker_id=config.worker_id,
+                    )
+                last_db_error = None
+                break
+            except SQLAlchemyError as exc:
+                last_db_error = exc
+                if not _is_transient_db_disconnect(exc) or attempt >= DB_RETRY_ATTEMPTS:
+                    raise
+                logger.warning(
+                    "Connexion PostgreSQL perdue pendant la lecture du lot "
+                    "(tentative %d/%d) : %s",
+                    attempt,
+                    DB_RETRY_ATTEMPTS,
+                    exc,
+                )
+                engine.dispose()
+                _db_retry_sleep(attempt)
+
+        if last_db_error is not None:
+            raise last_db_error
+
+        if not rows:
+            logger.info("Aucune détection en attente de labellisation. Job terminé.")
+            break
+
+        logger.info("Lot récupéré : %d détection(s) à traiter.", len(rows))
+        labeled_in_this_round = 0
+
+        # ------------------------------------------------------------------
+        # GEE : aucun lien DB n'est maintenu pendant ce calcul.
+        # ------------------------------------------------------------------
+        for i in range(0, len(rows), config.gee_batch_size):
+            sub_batch = rows[i : i + config.gee_batch_size]
+            updates = label_batch_via_gee(sub_batch)
+
+            if updates:
+                # ----------------------------------------------------------
+                # Écriture DB avec une nouvelle connexion et retry.
+                # La mise à jour est idempotente : si le COMMIT a réussi
+                # mais que son accusé de réception a été perdu, la répétition
+                # de la même valeur ne corrompt pas les données.
+                # ----------------------------------------------------------
+                last_db_error = None
+                for attempt in range(1, DB_RETRY_ATTEMPTS + 1):
+                    try:
+                        with session_factory() as write_session:
+                            apply_updates(
+                                write_session,
+                                updates,
+                                sync_landcover=config.sync_landcover_column,
+                            )
+                        last_db_error = None
+                        break
+                    except SQLAlchemyError as exc:
+                        last_db_error = exc
+                        if not _is_transient_db_disconnect(exc) or attempt >= DB_RETRY_ATTEMPTS:
+                            raise
+                        logger.warning(
+                            "Connexion PostgreSQL perdue pendant l'écriture du lot "
+                            "(tentative %d/%d) : %s",
+                            attempt,
+                            DB_RETRY_ATTEMPTS,
+                            exc,
+                        )
+                        engine.dispose()
+                        _db_retry_sleep(attempt)
+
+                if last_db_error is not None:
+                    raise last_db_error
+
+            labeled_in_this_round += len(updates)
+
+        total_labeled += labeled_in_this_round
+        total_processed += len(rows)
+
+        # Garde-fou anti-boucle-infinie.
+        if labeled_in_this_round == 0:
+            logger.warning(
+                "Aucun enregistrement labellisé sur ce lot de %d détection(s). "
+                "Arrêt du job pour éviter une boucle infinie — vérifiez les logs "
+                "GEE ci-dessus. Le traitement reprendra à la prochaine exécution.",
+                len(rows),
+            )
+            break
+
+        logger.info(
+            "Progression cumulée : %d détection(s) traitées, %d labellisées avec succès.",
+            total_processed,
+            total_labeled,
+        )
 
     logger.info(
         "=== Job terminé. Total traité=%d | Total labellisé=%d ===",
@@ -677,7 +780,12 @@ def main() -> None:
         logger.info("Worker configuré : WORK=%d/2", config.worker_id)
     else:
         logger.info("Worker configuré : WORK=0 (partitionnement désactivé)")
-    engine = create_engine(config.database_url, pool_pre_ping=True, future=True)
+    engine = create_engine(
+        config.database_url,
+        pool_pre_ping=True,
+        pool_recycle=DB_POOL_RECYCLE_SECONDS,
+        future=True,
+    )
 
     ensure_columns_exist(engine)
     initialize_gee(config)
