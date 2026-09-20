@@ -575,7 +575,12 @@ def labeling_worker() -> None:
                 return
 
             logger.info("Initialisation de la connexion PostgreSQL du worker...")
-            engine = create_engine(config.database_url, pool_pre_ping=True, future=True)
+            engine = create_engine(
+            config.database_url,
+            pool_pre_ping=True,
+            pool_recycle=300,
+            future=True,
+        )
 
             logger.info("Vérification du schéma PostgreSQL...")
 
