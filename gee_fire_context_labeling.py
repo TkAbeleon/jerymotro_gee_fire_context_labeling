@@ -25,7 +25,9 @@ Fonctionnement :
   4. Envoie les zones à GEE en LOT (FeatureCollection) via reduceRegions,
      avec retry/backoff exponentiel (tenacity) pour gérer les erreurs 429.
   5. Met à jour la base par lots de N enregistrements (commit régulier).
-  6. Peut tourner une fois (CI/CD) ou en démon planifié (cron/intervalle).
+  6. Partitionne optionnellement le travail entre deux workers indépendants
+     via WORK=1 ou WORK=2 : chaque worker traite une partition disjointe des IDs.
+  7. Peut tourner une fois (CI/CD) ou en démon planifié (cron/intervalle).
 
 Auteur : Généré pour le backend JeryMotro
 """
@@ -124,6 +126,7 @@ class AppConfig:
     max_records_per_run: Optional[int]
     region_filter: Optional[str]
     sync_landcover_column: bool
+    worker_id: int
 
 
 def _str_to_bool(value: Optional[str], default: bool = False) -> bool:
@@ -168,7 +171,22 @@ def load_config() -> AppConfig:
         sync_landcover_column=_str_to_bool(
             os.environ.get("SYNC_LANDCOVER_COLUMN"), default=False
         ),
+        worker_id=int(os.environ.get("WORK", os.environ.get("work", "0")) or "0"),
     )
+
+    if config.worker_id not in {0, 1, 2}:
+        logger.error(
+            "WORK invalide : %d. Valeurs autorisées : 0 (pas de partition), 1 ou 2.",
+            config.worker_id,
+        )
+        sys.exit(1)
+
+    if config.worker_id:
+        logger.info(
+            "Partitionnement multi-worker activé : WORK=%d/2. "
+            "Ce worker traite uniquement sa partition d'IDs.",
+            config.worker_id,
+        )
     logger.debug("Configuration chargée : %s", config)
     return config
 
@@ -423,25 +441,45 @@ def label_batch_via_gee(rows: List[dict]) -> Dict[int, dict]:
 # Base de données : lecture / écriture par lots
 # ---------------------------------------------------------------------------
 def fetch_pending_detections(
-    session: Session, limit: int, region_filter: Optional[str] = None
+    session: Session,
+    limit: int,
+    region_filter: Optional[str] = None,
+    worker_id: int = 0,
 ) -> List[dict]:
     """
     Récupère les détections non encore labellisées (fire_context_type IS NULL).
 
-    Les détections les plus récentes (`acq_datetime`) sont traitées en priorité :
-    ce sont celles qui alimentent les alertes et les FireEvent actifs.
+    Quand WORK=1 ou WORK=2, la table est partitionnée de façon déterministe
+    selon l'ID :
+      - WORK=1 -> IDs impairs
+      - WORK=2 -> IDs pairs
+
+    Les deux workers peuvent donc travailler simultanément sur la même base
+    sans sélectionner la même ligne. WORK=0 désactive le partitionnement.
+    Les détections les plus récentes (`acq_datetime`) restent prioritaires dans
+    chaque partition.
     """
     params: dict = {"limit": limit}
     region_clause = ""
+    worker_clause = ""
+
     if region_filter:
         region_clause = f'AND "{REGION_COLUMN}" = :region '
         params["region"] = region_filter
+
+    if worker_id in {1, 2}:
+        # Partition disjointe et stable : worker 1 = IDs impairs,
+        # worker 2 = IDs pairs. Après un redémarrage, le même worker reprend
+        # naturellement sa partition sans retraiter les lignes déjà labellisées.
+        worker_clause = f'AND MOD("{ID_COLUMN}" - 1, 2) = :worker_partition '
+        params["worker_partition"] = worker_id - 1
 
     query = text(
         f'SELECT "{ID_COLUMN}", "{LATITUDE_COLUMN}", "{LONGITUDE_COLUMN}" '
         f'FROM "{TABLE_NAME}" '
         f'WHERE fire_context_type IS NULL '
         f'AND "{LATITUDE_COLUMN}" IS NOT NULL AND "{LONGITUDE_COLUMN}" IS NOT NULL '
+        f'{worker_clause}'
         f'{region_clause}'
         f'ORDER BY "{ACQ_DATETIME_COLUMN}" DESC NULLS LAST, "{ID_COLUMN}" DESC '
         f'LIMIT :limit'
@@ -525,7 +563,10 @@ def run_labeling_job(engine: Engine, config: AppConfig) -> None:
                 break
 
             rows = fetch_pending_detections(
-                session, limit=config.db_batch_size, region_filter=config.region_filter
+                session,
+                limit=config.db_batch_size,
+                region_filter=config.region_filter,
+                worker_id=config.worker_id,
             )
             if not rows:
                 logger.info("Aucune détection en attente de labellisation. Job terminé.")
@@ -632,6 +673,10 @@ def main() -> None:
     config = load_config()
 
     logger.info("Connexion à la base de données...")
+    if config.worker_id:
+        logger.info("Worker configuré : WORK=%d/2", config.worker_id)
+    else:
+        logger.info("Worker configuré : WORK=0 (partitionnement désactivé)")
     engine = create_engine(config.database_url, pool_pre_ping=True, future=True)
 
     ensure_columns_exist(engine)
