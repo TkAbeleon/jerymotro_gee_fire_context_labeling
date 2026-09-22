@@ -106,8 +106,8 @@ WORLDCOVER_LABELS: Dict[str, str] = {
     "100": "Mousse / Lichen",
 }
 
-DEFAULT_DB_BATCH_SIZE = 500
-DEFAULT_GEE_BATCH_SIZE = 500
+DEFAULT_DB_BATCH_SIZE = 400
+DEFAULT_GEE_BATCH_SIZE = 400
 
 
 # ---------------------------------------------------------------------------
