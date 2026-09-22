@@ -539,6 +539,9 @@ def count_pending_detections(engine, region_filter: str | None = None) -> int:
 def labeling_worker() -> None:
     startup_delay = int(os.environ.get("LABELING_START_DELAY_SECONDS", "20"))
     interval_minutes = int(os.environ.get("INTERVAL_MINUTES", "360"))
+    work_retry_minutes = int(os.environ.get("WORK_RETRY_MINUTES", "1"))
+    if work_retry_minutes < 1:
+        work_retry_minutes = 1
 
     with STATE_LOCK:
         SERVICE_STATE["worker"] = "starting"
@@ -580,6 +583,8 @@ def labeling_worker() -> None:
             pool_pre_ping=True,
             pool_recycle=300,
             future=True,
+            pool_size=2,
+            max_overflow=2,
         )
 
             logger.info("Vérification du schéma PostgreSQL...")
@@ -633,21 +638,45 @@ def labeling_worker() -> None:
                 "et le worker réessaiera."
             )
 
-        finally:
-            if engine is not None:
-                engine.dispose()
+        # Ne pas attendre 6 h si la base contient encore du travail.
+        # Cela est particulièrement important avec WORK=1/WORK=2 :
+        # un worker peut avoir épuisé sa partition alors que l'autre travaille encore.
+        remaining_global = 0
+        if engine is not None:
+            try:
+                remaining_global = count_pending_detections(engine, config.region_filter)
+            except Exception:
+                logger.exception(
+                    "Impossible de vérifier les détections restantes avant la prochaine boucle."
+                )
+
+        if engine is not None:
+            engine.dispose()
+
+        if remaining_global > 0:
+            wait_minutes = work_retry_minutes
+            logger.info(
+                "Il reste encore %d détection(s) non labellisée(s) dans la base globale. "
+                "Nouveau cycle/check dans %d minute(s) au lieu de %d heure(s).",
+                remaining_global,
+                wait_minutes,
+                max(1, interval_minutes // 60),
+            )
+        else:
+            wait_minutes = interval_minutes
+            logger.info(
+                "Toutes les détections éligibles sont labellisées. "
+                "Prochaine vérification complète dans %d minute(s).",
+                wait_minutes,
+            )
 
         with STATE_LOCK:
             SERVICE_STATE["worker"] = "scheduled"
             SERVICE_STATE["cycle"] = "waiting"
-            SERVICE_STATE["next_run_in_seconds"] = interval_minutes * 60
+            SERVICE_STATE["next_run_in_seconds"] = wait_minutes * 60
             SERVICE_STATE["last_cycle_finished"] = datetime.now(timezone.utc).isoformat()
 
-        logger.info(
-            "Prochaine collecte automatique dans %d minute(s).",
-            interval_minutes,
-        )
-        time.sleep(interval_minutes * 60)
+        time.sleep(wait_minutes * 60)
 
 
 @app.on_event("startup")
