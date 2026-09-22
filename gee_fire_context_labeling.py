@@ -224,8 +224,23 @@ def ensure_columns_exist(engine: Engine, table_name: str = TABLE_NAME) -> None:
         )
         sys.exit(1)
 
-    statements: List[str] = []
-    if "fire_context_type" not in existing_columns:
+    # Table légère de réservation des lots entre workers parallèles.
+    # Elle permet le partage de travail sans doublon et sans garder
+    # une transaction PostgreSQL ouverte pendant le calcul GEE.
+    with engine.begin() as conn:
+        conn.execute(text(
+            f'CREATE TABLE IF NOT EXISTS "{CLAIM_TABLE_NAME}" ('
+            f'"detection_id" BIGINT PRIMARY KEY, '
+            f'"worker_id" SMALLINT NOT NULL, '
+            f'"claimed_at" TIMESTAMPTZ NOT NULL DEFAULT NOW()'
+            f')'
+        ))
+        conn.execute(text(
+            f'CREATE INDEX IF NOT EXISTS "ix_{CLAIM_TABLE_NAME}_claimed_at" '
+            f'ON "{CLAIM_TABLE_NAME}" ("claimed_at")'
+        ))
+
+    statements: List[str] = []    if "fire_context_type" not in existing_columns:
         statements.append(
             f'ALTER TABLE "{table_name}" '
             f'ADD COLUMN IF NOT EXISTS fire_context_type VARCHAR(100)'
@@ -444,6 +459,8 @@ def label_batch_via_gee(rows: List[dict]) -> Dict[int, dict]:
 DB_RETRY_ATTEMPTS = 6
 DB_RETRY_BASE_SECONDS = 2
 DB_POOL_RECYCLE_SECONDS = 300
+WORK_CLAIM_TTL_MINUTES = int(os.environ.get("WORK_CLAIM_TTL_MINUTES", "60"))
+CLAIM_TABLE_NAME = "gee_labeling_claims"
 
 
 def _is_transient_db_disconnect(exception: BaseException) -> bool:
@@ -488,50 +505,111 @@ def fetch_pending_detections(
     worker_id: int = 0,
 ) -> List[dict]:
     """
-    Récupère les détections non encore labellisées (fire_context_type IS NULL).
+    Récupère un lot et, pour WORK=1/2, réserve atomiquement ses lignes.
 
-    Quand WORK=1 ou WORK=2, la table est partitionnée de façon déterministe
-    selon l'ID :
-      - WORK=1 -> IDs impairs
-      - WORK=2 -> IDs pairs
-
-    Les deux workers peuvent donc travailler simultanément sur la même base
-    sans sélectionner la même ligne. WORK=0 désactive le partitionnement.
-    Les détections les plus récentes (`acq_datetime`) restent prioritaires dans
-    chaque partition.
+    WORK=1 commence par les IDs impairs et WORK=2 par les IDs pairs.
+    Si la partition native est vide, le worker passe automatiquement en
+    mode secours et récupère des lignes libres de n'importe quelle partition.
+    Les réservations sont stockées dans une table légère dédiée.
     """
     params: dict = {"limit": limit}
     region_clause = ""
-    worker_clause = ""
-
     if region_filter:
-        region_clause = f'AND "{REGION_COLUMN}" = :region '
+        region_clause = f'AND d."{REGION_COLUMN}" = :region '
         params["region"] = region_filter
 
-    if worker_id in {1, 2}:
-        # Partition disjointe et stable : worker 1 = IDs impairs,
-        # worker 2 = IDs pairs. Après un redémarrage, le même worker reprend
-        # naturellement sa partition sans retraiter les lignes déjà labellisées.
-        worker_clause = f'AND MOD("{ID_COLUMN}" - 1, 2) = :worker_partition '
-        params["worker_partition"] = worker_id - 1
-
-    query = text(
-        f'SELECT "{ID_COLUMN}", "{LATITUDE_COLUMN}", "{LONGITUDE_COLUMN}" '
-        f'FROM "{TABLE_NAME}" '
-        f'WHERE fire_context_type IS NULL '
-        f'AND "{LATITUDE_COLUMN}" IS NOT NULL AND "{LONGITUDE_COLUMN}" IS NOT NULL '
-        f'{worker_clause}'
-        f'{region_clause}'
-        f'ORDER BY "{ACQ_DATETIME_COLUMN}" DESC NULLS LAST, "{ID_COLUMN}" DESC '
-        f'LIMIT :limit'
+    # Récupère les réservations abandonnées après un crash/redémarrage.
+    session.execute(
+        text(
+            f'DELETE FROM "{CLAIM_TABLE_NAME}" '
+            f'WHERE "claimed_at" < NOW() - (:claim_ttl * INTERVAL \'1 minute\')'
+        ),
+        {"claim_ttl": WORK_CLAIM_TTL_MINUTES},
     )
-    result = session.execute(query, params)
-    rows = [
-        {"id": int(r[0]), "latitude": float(r[1]), "longitude": float(r[2])}
-        for r in result.fetchall()
-    ]
-    return rows
 
+    if worker_id not in {1, 2}:
+        query = text(
+            f'SELECT d."{ID_COLUMN}", d."{LATITUDE_COLUMN}", d."{LONGITUDE_COLUMN}" '
+            f'FROM "{TABLE_NAME}" d '
+            f'WHERE d.fire_context_type IS NULL '
+            f'AND d."{LATITUDE_COLUMN}" IS NOT NULL '
+            f'AND d."{LONGITUDE_COLUMN}" IS NOT NULL '
+            f'{region_clause}'
+            f'ORDER BY d."{ACQ_DATETIME_COLUMN}" DESC NULLS LAST, d."{ID_COLUMN}" DESC '
+            f'LIMIT :limit'
+        )
+        rows = session.execute(query, params).fetchall()
+        return [{"id": int(r[0]), "latitude": float(r[1]), "longitude": float(r[2])} for r in rows]
+
+    params["worker_partition"] = worker_id - 1
+
+    def _claim(preferred_partition: bool) -> List[dict]:
+        partition_clause = (
+            'AND MOD(d."id" - 1, 2) = :worker_partition '
+            if preferred_partition else ""
+        )
+
+        claim_query = text(
+            f'WITH candidates AS ( '
+            f'  SELECT d."{ID_COLUMN}" '
+            f'  FROM "{TABLE_NAME}" d '
+            f'  LEFT JOIN "{CLAIM_TABLE_NAME}" c '
+            f'    ON c."detection_id" = d."{ID_COLUMN}" '
+            f'  WHERE d.fire_context_type IS NULL '
+            f'    AND d."{LATITUDE_COLUMN}" IS NOT NULL '
+            f'    AND d."{LONGITUDE_COLUMN}" IS NOT NULL '
+            f'    AND c."detection_id" IS NULL '
+            f'    {partition_clause}'
+            f'    {region_clause}'
+            f'  ORDER BY d."{ACQ_DATETIME_COLUMN}" DESC NULLS LAST, d."{ID_COLUMN}" DESC '
+            f'  FOR UPDATE OF d SKIP LOCKED '
+            f'  LIMIT :limit '
+            f'), claimed AS ( '
+            f'  INSERT INTO "{CLAIM_TABLE_NAME}" '
+            f'    ("detection_id", "worker_id", "claimed_at") '
+            f'  SELECT "{ID_COLUMN}", :worker_id, NOW() '
+            f'  FROM candidates '
+            f'  ON CONFLICT ("detection_id") DO NOTHING '
+            f'  RETURNING "detection_id" '
+            f') '
+            f'SELECT d."{ID_COLUMN}", d."{LATITUDE_COLUMN}", d."{LONGITUDE_COLUMN}" '
+            f'FROM "{TABLE_NAME}" d '
+            f'JOIN claimed c ON c."detection_id" = d."{ID_COLUMN}" '
+            f'ORDER BY d."{ACQ_DATETIME_COLUMN}" DESC NULLS LAST, d."{ID_COLUMN}" DESC'
+        )
+        claim_params = dict(params)
+        claim_params["worker_id"] = worker_id
+        rows = session.execute(claim_query, claim_params).fetchall()
+        return [{"id": int(r[0]), "latitude": float(r[1]), "longitude": float(r[2])} for r in rows]
+
+    preferred_rows = _claim(preferred_partition=True)
+    if preferred_rows:
+        return preferred_rows
+
+    fallback_rows = _claim(preferred_partition=False)
+    if fallback_rows:
+        logger.info(
+            "WORK=%d a terminé sa partition native : passage automatique en MODE SECOURS, "
+            "%d détection(s) libre(s) récupérée(s) dans l'autre partition.",
+            worker_id,
+            len(fallback_rows),
+        )
+    return fallback_rows
+
+
+def release_claims(session: Session, detection_ids: List[int], worker_id: int) -> None:
+    """Libère les réservations appartenant à ce worker."""
+    if not detection_ids or worker_id not in {1, 2}:
+        return
+    session.execute(
+        text(
+            f'DELETE FROM "{CLAIM_TABLE_NAME}" '
+            f'WHERE "detection_id" = ANY(:detection_ids) '
+            f'AND "worker_id" = :worker_id'
+        ),
+        {"detection_ids": detection_ids, "worker_id": worker_id},
+    )
+    session.commit()
 
 def apply_updates(
     session: Session, updates: Dict[int, dict], sync_landcover: bool = False
@@ -620,6 +698,7 @@ def run_labeling_job(engine: Engine, config: AppConfig) -> None:
                         region_filter=config.region_filter,
                         worker_id=config.worker_id,
                     )
+                    session.commit()
                 last_db_error = None
                 break
             except SQLAlchemyError as exc:
@@ -654,12 +733,7 @@ def run_labeling_job(engine: Engine, config: AppConfig) -> None:
             updates = label_batch_via_gee(sub_batch)
 
             if updates:
-                # ----------------------------------------------------------
                 # Écriture DB avec une nouvelle connexion et retry.
-                # La mise à jour est idempotente : si le COMMIT a réussi
-                # mais que son accusé de réception a été perdu, la répétition
-                # de la même valeur ne corrompt pas les données.
-                # ----------------------------------------------------------
                 last_db_error = None
                 for attempt in range(1, DB_RETRY_ATTEMPTS + 1):
                     try:
@@ -687,6 +761,28 @@ def run_labeling_job(engine: Engine, config: AppConfig) -> None:
 
                 if last_db_error is not None:
                     raise last_db_error
+
+            # Libère les réservations même si GEE n'a pas pu produire de label.
+            # En cas de crash brutal, le TTL de la table de claims les récupère.
+            if config.worker_id in {1, 2}:
+                claim_ids = [int(row["id"]) for row in sub_batch]
+                for attempt in range(1, DB_RETRY_ATTEMPTS + 1):
+                    try:
+                        with session_factory() as release_session:
+                            release_claims(release_session, claim_ids, config.worker_id)
+                        break
+                    except SQLAlchemyError as exc:
+                        if not _is_transient_db_disconnect(exc) or attempt >= DB_RETRY_ATTEMPTS:
+                            raise
+                        logger.warning(
+                            "Connexion PostgreSQL perdue pendant la libération des réservations "
+                            "(tentative %d/%d) : %s",
+                            attempt,
+                            DB_RETRY_ATTEMPTS,
+                            exc,
+                        )
+                        engine.dispose()
+                        _db_retry_sleep(attempt)
 
             labeled_in_this_round += len(updates)
 
