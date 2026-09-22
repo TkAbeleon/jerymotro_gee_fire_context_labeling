@@ -364,7 +364,7 @@ WORK=1
 WORK=2
 ```
 
-Le partitionnement est déterministe sur la clé primaire `id` : le worker 1 traite les IDs impairs et le worker 2 les IDs pairs. Les deux services peuvent donc fonctionner en parallèle sur la même base. Après un redémarrage, chaque worker reprend uniquement sa partition et les lignes déjà labellisées restent exclues par `fire_context_type IS NULL`.
+Le partitionnement est déterministe sur la clé primaire `id` : le worker 1 commence par traiter les IDs impairs et le worker 2 les IDs pairs. Chaque lot est réservé atomiquement dans la table légère `gee_labeling_claims`, ce qui empêche les deux workers de prendre le même lot. Lorsqu'un worker termine sa partition native avant l'autre, il passe automatiquement en **mode secours** et récupère les lignes libres restantes, y compris dans l'autre partition. Après un redémarrage, les réservations abandonnées sont récupérées automatiquement après `WORK_CLAIM_TTL_MINUTES` et les lignes déjà labellisées restent exclues par `fire_context_type IS NULL`. Les deux services peuvent donc fonctionner en parallèle sur la même base. Après un redémarrage, chaque worker reprend uniquement sa partition et les lignes déjà labellisées restent exclues par `fire_context_type IS NULL`.
 
 Avec `WORK=0`, le partitionnement est désactivé (mode historique).
 
