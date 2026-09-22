@@ -240,7 +240,8 @@ def ensure_columns_exist(engine: Engine, table_name: str = TABLE_NAME) -> None:
             f'ON "{CLAIM_TABLE_NAME}" ("claimed_at")'
         ))
 
-    statements: List[str] = []    if "fire_context_type" not in existing_columns:
+    statements: List[str] = []
+    if "fire_context_type" not in existing_columns:
         statements.append(
             f'ALTER TABLE "{table_name}" '
             f'ADD COLUMN IF NOT EXISTS fire_context_type VARCHAR(100)'
