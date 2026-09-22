@@ -374,8 +374,8 @@ Le Free Tier de GEE impose des limites de mémoire et de temps de calcul. Si vou
 rencontrez des erreurs *User memory limit exceeded* :
 
 ```env
-GEE_BATCH_SIZE=200      # voire 100
-DB_BATCH_SIZE=200
+GEE_BATCH_SIZE=400
+DB_BATCH_SIZE=400
 ```
 
 ---
@@ -414,3 +414,7 @@ Projet interne JeryMotro. Les données ESA WorldCover sont distribuées sous
 licence CC BY 4.0 et requièrent l'attribution suivante :
 *ESA WorldCover project 2021 / Contains modified Copernicus Sentinel data (2021)
 processed by ESA WorldCover consortium.*
+
+### Basculement direct après épuisement de la partition
+
+Un worker WORK=1 ou WORK=2 essaie sa partition native à chaque lot. Dès qu'elle est épuisée, il passe directement en mode secours dans la même boucle et réserve les lots encore libres de l'autre partition. Il n'attend pas la fin d'un cycle de 6 heures pour changer de partition. La table gee_labeling_claims empêche deux workers de réserver simultanément la même ligne.
