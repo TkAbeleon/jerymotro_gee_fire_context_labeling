@@ -24,9 +24,9 @@ services:
       - key: INTERVAL_MINUTES
         value: "360"
       - key: DB_BATCH_SIZE
-        value: "200"
+        value: "400"
       - key: GEE_BATCH_SIZE
-        value: "200"
+        value: "400"
       - key: MAX_RECORDS_PER_RUN
         value: ""
       - key: REGION_FILTER
